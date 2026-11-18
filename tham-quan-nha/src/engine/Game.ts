@@ -104,7 +104,7 @@ export class Game {
     this.controls.maxPolarAngle = Math.PI / 2.05;
     this.resize();
     this.bindInput();
-    this.viewWC(); // same initial view as the original model
+    this.viewPerspective(); // start on the whole-house perspective (roof on)
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.frame);
   }
