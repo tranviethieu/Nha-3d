@@ -5,12 +5,14 @@ interface Props {
   onInteract: () => void;
   onJump: () => void;
   onView: () => void;
+  onAerial: () => void;
+  aerial: boolean;
 }
 
 const MAX = 50; // px the knob can travel
 
 /** Virtual joystick (bottom-left) and action buttons for phones/tablets. */
-export function TouchControls({ onStick, onInteract, onJump, onView }: Props) {
+export function TouchControls({ onStick, onInteract, onJump, onView, onAerial, aerial }: Props) {
   const origin = useRef<{ id: number; x: number; y: number } | null>(null);
   const [knob, setKnob] = useState({ x: 0, y: 0 });
 
@@ -40,6 +42,7 @@ export function TouchControls({ onStick, onInteract, onJump, onView }: Props) {
         <button onClick={onInteract}>E</button>
         <button onClick={onJump} aria-label="Nhảy"><i className="ti ti-arrow-big-up" aria-hidden="true" /></button>
         <button onClick={onView}>V</button>
+        <button onClick={onAerial} className={aerial ? 'on' : ''} aria-label="Toàn cảnh"><i className="ti ti-map-2" aria-hidden="true" /></button>
       </div>
     </>
   );

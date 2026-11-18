@@ -23,6 +23,8 @@ export interface HudState {
   /** Text of the action E would perform, or null when nothing is in reach. */
   prompt: string | null;
   firstPerson: boolean;
+  /** Bird's-eye camera that follows the character (whole house in view). */
+  aerial: boolean;
   roofMode: RoofMode;
   lying: boolean;
 }
@@ -65,6 +67,9 @@ export class Game {
   private yaw = START.yaw; private pitch = 0.38; private fpPitch = 0; private dist = 4.2;
   private camTarget = new THREE.Vector3(START.x, 1.2, START.z);
   private firstPerson = false;
+  private aerial = false; private aerialDist = 16; private aerialPitch = 1.2;
+  private marker: THREE.Mesh;
+  private pinchD = 0;
   private roofMode: RoofMode = 'auto';
 
   // kitchen dish rack
@@ -89,6 +94,11 @@ export class Game {
     this.hero.root.visible = this.hero.shadow.visible = false;
     this.minimap = new Minimap(mapCanvas, this.house);
     this.dims = buildDimensions(this.scene);
+    // ring around the player's feet, drawn through walls, so the character is easy to find from above
+    this.marker = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.46, 40),
+      new THREE.MeshBasicMaterial({ color: 0x2f6fb3, transparent: true, opacity: 0.85, depthTest: false, depthWrite: false, fog: false }));
+    this.marker.rotation.x = -Math.PI / 2; this.marker.renderOrder = 30; this.marker.visible = false;
+    this.scene.add(this.marker);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.maxPolarAngle = Math.PI / 2.05;
@@ -143,7 +153,7 @@ export class Game {
     this.mode = 'tour';
     this.controls.enabled = false;
     this.camera.fov = 60; this.camera.updateProjectionMatrix();
-    this.roofMode = 'auto'; this.firstPerson = false;
+    this.roofMode = 'auto'; this.firstPerson = false; this.aerial = false;
     this.goHome(false);
     this.onToast('Bắt đầu tham quan — dùng W A S D để đi');
   };
@@ -152,7 +162,7 @@ export class Game {
     if (this.lying) this.standUp();
     this.mode = 'overview';
     this.keys = {}; this.stick = { x: 0, y: 0 };
-    this.hero.root.visible = this.hero.shadow.visible = false;
+    this.hero.root.visible = this.hero.shadow.visible = this.marker.visible = false;
     this.camera.fov = 50; this.camera.updateProjectionMatrix();
     this.controls.enabled = true;
     if (this.savedOverview) { this.camera.position.copy(this.savedOverview.pos); this.controls.target.copy(this.savedOverview.target); }
@@ -160,7 +170,16 @@ export class Game {
   };
 
   // ======================= tour actions =======================
-  toggleView = () => { this.firstPerson = !this.firstPerson; this.fpPitch = this.lying ? 1.2 : 0; };
+  /** Cycle camera: third person → aerial → first person → third person. */
+  toggleView = () => {
+    if (this.firstPerson) this.firstPerson = false;
+    else if (this.aerial) { this.aerial = false; this.firstPerson = true; }
+    else { this.aerial = true; this.fitAerial(); }
+    this.fpPitch = this.lying ? 1.2 : 0;
+  };
+  toggleAerial = () => { this.aerial = !this.aerial; if (this.aerial) { this.firstPerson = false; this.fitAerial(); } };
+  /** Start the aerial view far enough out that the whole house fits (portrait phones need more distance). */
+  private fitAerial() { this.aerialDist = this.camera.aspect < 1 ? 26 : 16; this.aerialPitch = 1.2; }
   cycleRoof = () => { this.roofMode = ({ auto: 'on', on: 'off', off: 'auto' } as const)[this.roofMode]; };
   jump = () => { if (this.lying) { this.standUp(); return; } if (this.p.onGround) { this.p.vy = JUMP; this.p.onGround = false; } };
   setStick = (x: number, y: number) => { this.stick.x = x; this.stick.y = y; };
@@ -257,9 +276,16 @@ export class Game {
     this.renderer.setSize(w, h);
   };
 
+  /** factor > 1 moves the camera away. */
+  private zoom(f: number) {
+    if (this.aerial) this.aerialDist = THREE.MathUtils.clamp(this.aerialDist * f, 8, 40);
+    else this.dist = THREE.MathUtils.clamp(this.dist * f, 1.6, 14);
+  }
+
   private look(dx: number, dy: number) {
     this.yaw -= dx * 0.005;
-    if (this.firstPerson) this.fpPitch = THREE.MathUtils.clamp(this.fpPitch - dy * 0.004, -1.3, 1.45);
+    if (this.aerial) this.aerialPitch = THREE.MathUtils.clamp(this.aerialPitch + dy * 0.004, 0.45, 1.5);
+    else if (this.firstPerson) this.fpPitch = THREE.MathUtils.clamp(this.fpPitch - dy * 0.004, -1.3, 1.45);
     else this.pitch = THREE.MathUtils.clamp(this.pitch + dy * 0.004, -0.15, 1.4);
   }
 
@@ -290,7 +316,7 @@ export class Game {
       if (e.repeat && !MOVE_KEYS.includes(e.code)) return;
       if (this.lying && MOVE_KEYS.includes(e.code)) { this.standUp(); return; }
       const act: Record<string, () => void> = {
-        KeyE: this.interact, KeyV: this.toggleView, KeyR: this.cycleRoof, KeyO: this.toggleAllDoors,
+        KeyE: this.interact, KeyV: this.toggleView, KeyR: this.cycleRoof, KeyO: this.toggleAllDoors, KeyT: this.toggleAerial,
         KeyH: () => this.goHome(), KeyK: this.toggleDims, Space: this.jump, Escape: this.exitTour,
       };
       act[e.code]?.();
@@ -302,18 +328,27 @@ export class Game {
     });
     on(cv, 'pointermove', (e: PointerEvent) => {
       const q = this.pointers.get(e.pointerId); if (!q) return;
+      if (this.mode === 'tour' && this.pointers.size >= 2) {
+        // two-finger pinch zooms the tour camera
+        q.x = e.clientX; q.y = e.clientY;
+        const [a, b] = [...this.pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (this.pinchD > 0 && d > 0) this.zoom(this.pinchD / d);
+        this.pinchD = d; return;
+      }
       if (this.mode === 'tour') { const k = e.pointerType === 'touch' ? 1.4 : 1; this.look((e.clientX - q.x) * k, (e.clientY - q.y) * k); }
       q.x = e.clientX; q.y = e.clientY;
     });
     const up = (e: PointerEvent) => {
       const q = this.pointers.get(e.pointerId); if (!q) return;
+      const wasPinch = this.pinchD > 0 || this.pointers.size > 1;
       this.pointers.delete(e.pointerId);
-      if (e.type === 'pointerup' && Math.hypot(e.clientX - q.sx, e.clientY - q.sy) < 6) this.pick(e.clientX, e.clientY);
+      if (this.pointers.size < 2) this.pinchD = 0;
+      if (!wasPinch && e.type === 'pointerup' && Math.hypot(e.clientX - q.sx, e.clientY - q.sy) < 6) this.pick(e.clientX, e.clientY);
     };
     on(cv, 'pointerup', up); on(cv, 'pointercancel', up);
     on(cv, 'wheel', (e: WheelEvent) => {
       if (this.mode !== 'tour') return; // OrbitControls zooms in overview
-      e.preventDefault(); this.dist = THREE.MathUtils.clamp(this.dist * (1 + Math.sign(e.deltaY) * 0.1), 1.6, 14);
+      e.preventDefault(); this.zoom(1 + Math.sign(e.deltaY) * 0.1);
     }, { passive: false });
   }
 
@@ -340,7 +375,7 @@ export class Game {
     } else {
       this.updatePlayer(dt, now);
       room = roomAt(this.p.x, this.p.z);
-      h.roof.visible = this.roofMode === 'on' || (this.roofMode === 'auto' && !room && !this.firstPerson);
+      h.roof.visible = this.roofMode === 'on' || (this.roofMode === 'auto' && !room && !this.firstPerson && !this.aerial);
       h.labels.forEach(s => { s.visible = false; });
       // while touring, only annotate the room you are in (or the outside dimensions in the yard)
       this.dims.group.visible = this.dimsOn;
@@ -354,7 +389,7 @@ export class Game {
       mode: this.mode, roofOn: this.roofOn, rackDown: this.rackDown,
       anyDoorClosed: h.doors.some(d => !d.open), anyWindowClosed: h.windows.some(w => !w.open), dimsOn: this.dimsOn,
       room: room ?? 'Sân vườn', prompt: this.mode === 'tour' ? this.promptFor(n) : null,
-      firstPerson: this.firstPerson, roofMode: this.roofMode, lying: !!this.lying,
+      firstPerson: this.firstPerson, aerial: this.aerial, roofMode: this.roofMode, lying: !!this.lying,
     };
     if (this.dims.group.visible) faceCamera(this.camera.getWorldDirection(new THREE.Vector3()));
     const key = JSON.stringify(hud);
@@ -408,7 +443,23 @@ export class Game {
       else cam.position.set(p.x + Math.sin(p.face) * 0.08, p.y + EYE, p.z + Math.cos(p.face) * 0.08);
       const c = Math.cos(this.fpPitch);
       cam.lookAt(cam.position.x - Math.sin(this.yaw) * c, cam.position.y + Math.sin(this.fpPitch), cam.position.z - Math.cos(this.yaw) * c);
-      hero.root.visible = false;
+      hero.root.visible = false; this.marker.visible = false;
+      return;
+    }
+    // player marker for the aerial view
+    this.marker.visible = this.aerial;
+    if (this.aerial) {
+      const at = this.lying ? hero.root.position : new THREE.Vector3(p.x, p.y, p.z);
+      this.marker.position.set(at.x, (this.lying ? this.lying.bed.top : floorTop(this.house, p.x, p.z)) + 0.03, at.z);
+      this.marker.scale.setScalar(1 + Math.sin(performance.now() / 300) * 0.08);
+    }
+    if (this.aerial) {
+      // bird's-eye: no wall avoidance, the roof is hidden so the whole floor plan is visible
+      if (!this.lying) this.camTarget.lerp(new THREE.Vector3(p.x, p.y + 0.8, p.z), Math.min(1, dt * 6));
+      const ap = this.aerialPitch;
+      cam.position.copy(this.camTarget).add(new THREE.Vector3(Math.sin(this.yaw) * Math.cos(ap), Math.sin(ap), Math.cos(this.yaw) * Math.cos(ap)).multiplyScalar(this.aerialDist));
+      cam.lookAt(this.camTarget);
+      hero.root.visible = true;
       return;
     }
     if (!this.lying) this.camTarget.lerp(new THREE.Vector3(p.x, p.y + 1.35, p.z), Math.min(1, dt * 10));

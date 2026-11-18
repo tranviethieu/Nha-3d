@@ -109,3 +109,6 @@ kbd {
   .bar-buttons button { font-size: 13px; padding: 8px 10px; flex: none; }
   .overview .sub { display: none; }
 }
+
+.touch-btns button.on { background: var(--accent); color: #fff; border-color: transparent; }
+.touch-btns button i { font-size: 22px; }

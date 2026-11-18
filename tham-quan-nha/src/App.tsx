@@ -39,7 +39,8 @@ export default function App() {
   ];
 
   const tourTools = [
-    { icon: 'ti-eye', label: hud?.firstPerson ? 'Góc nhìn thứ ba' : 'Góc nhìn thứ nhất', key: 'V', run: (x: Game) => x.toggleView() },
+    { icon: 'ti-eye', label: `Góc nhìn: ${hud?.aerial ? 'toàn cảnh' : hud?.firstPerson ? 'thứ nhất' : 'thứ ba'}`, key: 'V', run: (x: Game) => x.toggleView() },
+    { icon: 'ti-map-2', label: hud?.aerial ? 'Thoát toàn cảnh' : 'Toàn cảnh', key: 'T', run: (x: Game) => x.toggleAerial() },
     { icon: 'ti-home', label: ROOF_LABEL[hud?.roofMode ?? 'auto'], key: 'R', run: (x: Game) => x.cycleRoof() },
     { icon: 'ti-door', label: hud?.anyDoorClosed === false ? 'Đóng tất cả cửa' : 'Mở tất cả cửa', key: 'O', run: (x: Game) => x.toggleAllDoors() },
     { icon: 'ti-ruler-measure', label: hud?.dimsOn ? 'Ẩn kích thước' : 'Hiện kích thước', key: 'K', run: (x: Game) => x.toggleDims() },
@@ -91,7 +92,7 @@ export default function App() {
         {!isTouch && (
           <div className="panel help">
             <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / mũi tên: đi lại · <kbd>Shift</kbd> chạy · <kbd>Space</kbd> nhảy</div>
-            <div><kbd>E</kbd> mở/đóng cửa, cửa sổ, hạ giá bát, nằm lên giường · kéo chuột để xoay · cuộn để zoom</div>
+            <div><kbd>E</kbd> mở/đóng cửa, cửa sổ, hạ giá bát, nằm lên giường · kéo chuột để xoay · cuộn để zoom · <kbd>T</kbd> toàn cảnh</div>
             <div>Đi vào cửa đang đóng sẽ tự mở cửa · <kbd>Esc</kbd> về chế độ tổng quan</div>
           </div>
         )}
@@ -108,6 +109,8 @@ export default function App() {
             onInteract={() => g()?.interact()}
             onJump={() => g()?.jump()}
             onView={() => g()?.toggleView()}
+            onAerial={() => g()?.toggleAerial()}
+            aerial={!!hud?.aerial}
           />
         )}
       </div>
