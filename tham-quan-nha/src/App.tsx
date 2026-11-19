@@ -33,6 +33,7 @@ export default function App() {
     { icon: 'ti-home', label: hud?.roofOn ? 'Ẩn mái' : 'Hiện mái', run: (x: Game) => x.toggleRoof() },
     { icon: 'ti-door', label: hud?.anyDoorClosed === false ? 'Đóng tất cả cửa' : 'Mở tất cả cửa', run: (x: Game) => x.toggleAllDoors() },
     { icon: 'ti-window', label: hud?.anyWindowClosed === false ? 'Đóng cửa sổ' : 'Mở cửa sổ', run: (x: Game) => x.toggleAllWindows() },
+    { icon: 'ti-box', label: hud?.anyWardrobeClosed === false ? 'Đóng tủ quần áo' : 'Mở tủ quần áo', run: (x: Game) => x.toggleAllWardrobes() },
     { icon: 'ti-arrows-vertical', label: hud?.rackDown ? 'Nâng giá bát' : 'Hạ giá bát', run: (x: Game) => x.toggleRack() },
     { icon: 'ti-cube', label: 'Phối cảnh', run: (x: Game) => x.viewPerspective() },
     { icon: 'ti-ruler-measure', label: hud?.dimsOn ? 'Ẩn kích thước' : 'Hiện kích thước', run: (x: Game) => x.toggleDims() },
@@ -65,7 +66,7 @@ export default function App() {
               <button key={b.icon} onClick={click(b.run)}><i className={`ti ${b.icon}`} aria-hidden="true" />{b.label}</button>
             ))}
           </div>
-          <p className="hint">{hud?.dimsOn ? 'Kích thước & diện tích theo bản vẽ thực tế · ' : ''}{isTouch ? 'Chạm vào cửa, cửa sổ hoặc giá bát để đóng mở · kéo để xoay · chụm 2 ngón để phóng to' : 'Bấm vào cánh cửa, cửa sổ hoặc giá bát để đóng mở · kéo để xoay · cuộn để phóng to'}</p>
+          <p className="hint">{hud?.dimsOn ? 'Kích thước & diện tích theo bản vẽ thực tế · ' : ''}{isTouch ? 'Chạm vào cửa, cửa sổ, tủ hoặc giá bát để đóng mở · kéo để xoay · chụm 2 ngón để phóng to' : 'Bấm vào cánh cửa, cửa sổ, tủ hoặc giá bát để đóng mở · kéo để xoay · cuộn để phóng to'}</p>
         </div>
         <button className="tour-cta" onClick={click(x => x.enterTour())}>
           <i className="ti ti-walk" aria-hidden="true" /> Thăm quan
@@ -76,7 +77,7 @@ export default function App() {
       <div className={touring ? '' : 'hidden'}>
         <div className="panel info">
           <h1>Tham quan nhà 9 × 14 m</h1>
-          <div className="room">{hud?.room ?? '…'}{hud?.lying ? ' · đang nằm' : ''}</div>
+          <div className="room">{hud?.room ?? '…'}{hud?.lying ? ' · đang nằm' : hud?.sitting ? ' · đang ngồi' : ''}</div>
         </div>
 
         <div className="panel tools">
@@ -92,7 +93,7 @@ export default function App() {
         {!isTouch && (
           <div className="panel help">
             <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / mũi tên: đi lại · <kbd>Shift</kbd> chạy · <kbd>Space</kbd> nhảy</div>
-            <div><kbd>E</kbd> mở/đóng cửa, cửa sổ, hạ giá bát, nằm lên giường · kéo chuột để xoay · cuộn để zoom · <kbd>T</kbd> toàn cảnh</div>
+            <div><kbd>E</kbd> mở/đóng cửa, cửa sổ, hạ giá bát, mở tủ, ngồi ghế/sofa, nằm giường · kéo chuột để xoay · cuộn để zoom · <kbd>T</kbd> toàn cảnh</div>
             <div>Đi vào cửa đang đóng sẽ tự mở cửa · <kbd>Esc</kbd> về chế độ tổng quan</div>
           </div>
         )}

@@ -7,10 +7,12 @@ export type Dir = '+x' | '-x' | '+z' | '-z';
 /** Axis-aligned box in WORLD coordinates. */
 export interface Rect { x0: number; x1: number; z0: number; z1: number; y0: number; y1: number }
 /** Something that swings on a vertical hinge: g.rotation.y eases from c (closed) to o (open); t is the target. */
-export interface Leaf { g: THREE.Group; c: number; o: number; t: number }
+export interface Leaf { g: THREE.Group; c: number; o: number; t: number; /** hinge axis, default 'y' (vertical) */ axis?: 'x' | 'y' }
 export interface Door extends Leaf { open: boolean; len: number }
-/** A casement window: two sashes hinged on the jambs, opening outward. */
+/** Something with hinged leaves that open together: a casement/awning window or a wardrobe. x,z = its front centre. */
 export interface Win { leaves: Leaf[]; open: boolean; x: number; z: number }
+/** Where the character sits: hip position (WORLD), facing yaw, seat height. */
+export interface Seat { x: number; z: number; face: number; top: number; kind: 'chair' | 'sofa' }
 /** Bed in WORLD coords; the headboard is on the z0 side ('N') or z1 side ('S'). */
 export interface Bed { x0: number; z0: number; x1: number; z1: number; head: 'N' | 'S'; top: number }
 export interface House {
@@ -26,7 +28,10 @@ export interface House {
   /** The two WC doors (opened by the "Xem nhà vệ sinh" overview preset). */
   wcDoors: [Door, Door];
   windows: Win[];
+  /** Bedroom wardrobes with opening doors. */
+  wardrobes: Win[];
   beds: Bed[];
+  seats: Seat[];
   /** Room name sprites, shown in the overview when the roof is hidden. */
   labels: THREE.Sprite[];
   clickables: THREE.Object3D[];
@@ -75,7 +80,9 @@ export function buildHouse(scene: THREE.Scene): House {
   box(10.95,6.3,12.325,7.92,0.012,0.02,showerTile,false);box(12.425,6.3,13.8,7.92,0.012,0.02,showerTile,false);
   // Window openings [x0,z0,x1,z1,y0,y1] (plan). The original drew glass over solid walls;
   // here walls are cut around them so the sashes can swing open.
-  const WIN=[[2.8,-0.02,4.4,0.22,0.9,2.2],[7.97,-0.02,9.17,0.22,0.9,1.7],[10.1,-0.02,11.1,0.22,0.9,2.2],[-0.02,6.12,0.22,7.72,0.9,2.2],[5.37,8.78,6.37,9.02,0.9,2.2],[9.53,8.78,10.73,9.02,0.9,2.2],[11.33,8.78,11.93,9.02,1.6,2.2],[12.81,8.78,13.41,9.02,1.6,2.2]];
+  const WIN=[[2.8,-0.02,4.4,0.22,0.9,2.2],[7.97,-0.02,9.17,0.22,0.9,1.7],[10.1,-0.02,11.1,0.22,0.9,2.2],[-0.02,6.12,0.22,7.72,0.9,2.2],[5.37,8.78,6.37,9.02,0.9,2.2],[9.53,8.78,10.73,9.02,0.9,2.2],[11.33,8.78,11.93,9.02,1.6,2.2],[12.81,8.78,13.41,9.02,1.6,2.2],
+    // west wall (x = 14; the porch side x = 0 faces east): beside the washing machine, and beside the bed in P. ngủ 3
+    [13.78,5.25,14.02,5.95,1.1,2.0],[13.78,0.9,14.02,2.1,0.9,2.2]];
   /** A wall box split into pieces around any window opening that passes through it. */
   function wallWithHoles(w:number[],y0:number,y1:number,mat:THREE.MeshStandardMaterial,edges:boolean){
     const alongX=(w[2]-w[0])>=(w[3]-w[1]);const a0=alongX?w[0]:w[1],a1=alongX?w[2]:w[3];
@@ -110,7 +117,8 @@ export function buildHouse(scene: THREE.Scene): House {
   const winFrame=M(0x2b2b2b);
   const windows:Win[]=[],winLeaves:THREE.Mesh[]=[];
   const angW:Record<Dir,number>={'+x':0,'-x':Math.PI,'+z':-Math.PI/2,'-z':Math.PI/2};
-  WIN.forEach(g=>{
+  const AWNING=1; // kitchen window (above the counter) opens from the bottom
+  WIN.forEach((g,wi)=>{
     const alongX=(g[2]-g[0])>(g[3]-g[1]),cx=(g[0]+g[2])/2,cz=(g[1]+g[3])/2,fw=0.04;
     const out:Dir=alongX?(cz<4.5?'-z':'+z'):(cx<7?'-x':'+x');
     // wall faces (the opening box is 2 cm proud on each side of the wall)
@@ -121,6 +129,13 @@ export function buildHouse(scene: THREE.Scene): House {
     box(g[0]-0.05,g[1]-0.03,g[2]+0.05,g[3]+0.03,g[4]-0.05,g[4],colMat,false);
     const len=(A1-A0-2*fw)/2,h=g[5]-g[4]-fw;
     const win:Win={leaves:[],open:false,x:cx-7,z:cz-4.5};
+    if(wi===AWNING&&alongX){
+      const gr=new THREE.Group();gr.position.set(cx-7,g[5]-fw,face-4.5);
+      const geo=new THREE.BoxGeometry(A1-A0-2*fw-0.01,h,0.03);const m=new THREE.Mesh(geo,glass);m.position.set(0,-h/2,0);gr.add(m);
+      const ed=new THREE.LineSegments(new THREE.EdgesGeometry(geo),frameMat);ed.position.copy(m.position);gr.add(ed);
+      const hd=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.025,0.04),winFrame);hd.position.set(0,-h+0.04,out==='-z'?0.03:-0.03);gr.add(hd);
+      win.leaves.push({g:gr,c:0,o:out==='-z'?1.05:-1.05,t:0,axis:'x'});m.userData.win=win;hd.userData.win=win;winLeaves.push(m,hd);scene.add(gr);
+      windows.push(win);return;}
     ([[A0+fw,alongX?'+x':'+z'],[A1-fw,alongX?'-x':'-z']] as [number,Dir][]).forEach(([a,cd])=>{
       const gr=new THREE.Group();if(alongX)gr.position.set(a-7,0,face-4.5);else gr.position.set(face-7,0,a-4.5);
       const geo=new THREE.BoxGeometry(len-0.01,h,0.03);const m=new THREE.Mesh(geo,glass);m.position.set(len/2,g[4]+h/2,0);gr.add(m);
@@ -154,8 +169,12 @@ export function buildHouse(scene: THREE.Scene): House {
   box(2.58,3.29,3.33,4.04,0,0.42,fabric);box(2.58,3.84,3.33,4.04,0.42,0.85,fabric);
   box(4.04,3.29,4.79,4.04,0,0.42,fabric);box(4.04,3.84,4.79,4.04,0.42,0.85,fabric);
   box(3.43,3.42,3.93,3.92,0,0.55,darkWood);
+  const seats:Seat[]=[];
+  const seat=(x:number,z:number,face:number,top:number,kind:Seat['kind'])=>seats.push({x:x-7,z:z-4.5,face,top,kind});
+  seat(2.85,0.82,0,0.42,'sofa');seat(3.55,0.82,0,0.42,'sofa');seat(4.15,0.52,0,0.42,'sofa');
+  seat(2.955,3.72,Math.PI,0.42,'sofa');seat(4.415,3.72,Math.PI,0.42,'sofa');
   box(6.05,2.1,7.65,3.0,0.72,0.77,wood);box(6.15,2.2,7.55,2.9,0,0.72,wood);
-  [6.16,6.64,7.13].forEach(x=>{box(x,1.6,x+0.42,2.02,0,0.45,chairF);box(x,1.6,x+0.42,1.66,0.45,0.9,chairF);box(x,3.08,x+0.42,3.5,0,0.45,chairF);box(x,3.44,x+0.42,3.5,0.45,0.9,chairF);});
+  [6.16,6.64,7.13].forEach(x=>{seat(x+0.21,1.78,0,0.45,'chair');seat(x+0.21,3.32,Math.PI,0.45,'chair');box(x,1.6,x+0.42,2.02,0,0.45,chairF);box(x,1.6,x+0.42,1.66,0.45,0.9,chairF);box(x,3.08,x+0.42,3.5,0,0.45,chairF);box(x,3.44,x+0.42,3.5,0.45,0.9,chairF);});
   box(7.89,0.2,9.95,0.8,0,0.85,counter);box(9.35,0.8,9.95,2.76,0,0.85,counter);
   box(7.89,0.2,9.95,0.8,0.85,0.88,M(0x2f2f33));box(9.35,0.8,9.95,2.76,0.85,0.88,M(0x2f2f33));
   box(8.0,0.26,8.8,0.72,0.88,0.9,M(0x0d0d0d));
@@ -200,11 +219,11 @@ export function buildHouse(scene: THREE.Scene): House {
   function bed(x0:number,z0:number,x1:number,z1:number,head:'N'|'S'){beds.push({x0:x0-7,z0:z0-4.5,x1:x1-7,z1:z1-4.5,head,top:0.55});box(x0,z0,x1,z1,0,0.45,white);box(x0+0.02,z0+0.02,x1-0.02,z1-0.02,0.45,0.55,blanket);
   if(head==='N')box(x0,z0,x1,z0+0.1,0,1.0,wood);if(head==='S')box(x0,z1-0.1,x1,z1,0,1.0,wood);}
   bed(11.55,0.2,13.35,2.2,'N');box(11.1,0.2,11.55,0.65,0,0.5,wood);box(13.35,0.2,13.8,0.65,0,0.5,wood);
-  box(10.05,0.2,11.05,0.7,0,0.75,wood);box(11.8,3.15,13.8,3.95,0,2.2,wood);
+  box(10.05,0.2,11.05,0.7,0,0.75,wood);
   bed(3.1,6.8,4.9,8.8,'S');box(2.65,8.35,3.1,8.8,0,0.5,wood);box(4.9,8.35,5.35,8.8,0,0.5,wood);
-  box(5.4,8.3,6.4,8.8,0,0.75,wood);box(2.65,5.05,4.65,5.85,0,2.2,wood);
+  box(5.4,8.3,6.4,8.8,0,0.75,wood);
   bed(6.95,6.8,8.75,8.8,'S');box(6.5,8.35,6.95,8.8,0,0.5,wood);box(8.75,8.35,9.2,8.8,0,0.5,wood);
-  box(9.65,8.2,10.85,8.8,0,0.75,wood);box(6.5,5.05,8.5,5.85,0,2.2,wood);
+  box(9.65,8.2,10.85,8.8,0,0.75,wood);
   box(1.59,5.96,2.55,7.88,0,1.2,altar);
   box(13.2,5.16,13.8,5.76,0,0.85,white);cyl(13.5,0.6,5.46,0.17,0.17,0.02,M(0x9aa1a8),Math.PI/2*0,Math.PI/2);
   [[10.97,12.25],[12.445,13.72]].forEach(w=>{box(w[0],8.2,w[0]+0.18,8.62,0,0.8,ceramic);
@@ -226,6 +245,30 @@ export function buildHouse(scene: THREE.Scene): House {
   door(1.42,5.0,0.8,'+x','+z',inWood);door(6.17,5.0,0.8,'-x','+z',inWood);door(9.85,5.0,0.8,'-x','+z',inWood);door(10.15,4.0,0.8,'+x','-z',inWood);
   const wcDoors:[Door,Door]=[door(12.24,6.25,0.7,'-x','+z',wcDoor),door(13.57,6.25,0.7,'-x','+z',wcDoor)];
   clickables.push(...winLeaves);
+  const wardrobes:Win[]=[],inner=M(0xd7b48c),cloth=[0x3d7cc9,0xc94f4f,0xe8e2d6,0x4f8a5b,0x2f3a4a,0xd9a441].map(M);
+  /** 2 m wardrobe: open-front carcass with clothes on a rail and shelves, four doors opening toward `out`. */
+  function wardrobe(x0:number,z0:number,x1:number,z1:number,out:'+z'|'-z'){
+    const t=0.025,WH=2.2,s=out==='+z'?1:-1,zf=s>0?z1:z0,zb=s>0?z0:z1,xm=(x0+x1)/2;
+    box(x0,z0,x0+t,z1,0,WH,wood);box(x1-t,z0,x1,z1,0,WH,wood);box(xm-t/2,z0,xm+t/2,z1,0,WH,wood);
+    box(x0,Math.min(zb,zb+s*t),x1,Math.max(zb,zb+s*t),0,WH,inner);
+    box(x0,z0,x1,z1,WH-t,WH,wood);box(x0,z0,x1,z1,0,0.08,wood);
+    solids.push({x0:x0-7,x1:x1-7,z0:z0-4.5,z1:z1-4.5,y0:0,y1:WH});
+    // left half: shelf + hanging rail with clothes; right half: shelves with folded stacks
+    box(x0+t,z0+0.01,xm,z1-0.01,1.84,1.86,inner,false);
+    cyl((x0+xm)/2,1.74,(z0+z1)/2,0.012,0.012,xm-x0-t,steel,0,Math.PI/2);
+    for(let i=0;i<7;i++){const x=x0+0.12+i*0.12;box(x-0.02,(z0+z1)/2-0.22,x+0.02,(z0+z1)/2+0.22,0.95+(i%3)*0.08,1.72,cloth[i%cloth.length],false);}
+    [0.55,1.05,1.45].forEach((y,k)=>{box(xm+t/2,z0+0.01,x1-t,z1-0.01,y,y+0.02,inner,false);
+      [0,1,2].forEach(j=>{const a=xm+0.08+j*0.3;box(a,(z0+z1)/2-0.15,a+0.22,(z0+z1)/2+0.15,y+0.02,y+0.12+((j+k)%2)*0.06,cloth[(j+k*2)%cloth.length],false);});});
+    const w:Win={leaves:[],open:false,x:xm-7,z:zf-4.5},lw=(x1-x0)/4;
+    for(let i=0;i<4;i++){const cd:Dir=i%2?'-x':'+x',hx=x0+(i%2?i+1:i)*lw;
+      const gr=new THREE.Group();gr.position.set(hx-7,0,zf+s*0.012-4.5);
+      const geo=new THREE.BoxGeometry(lw-0.006,2.14,0.02);const m=new THREE.Mesh(geo,wood);m.position.set(lw/2,1.1,0);gr.add(m);
+      const ed=new THREE.LineSegments(new THREE.EdgesGeometry(geo),edgeMat);ed.position.copy(m.position);gr.add(ed);
+      const kn=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.22,0.025),knobMat);kn.position.set(lw-0.05,1.1,(cd==='+x'?s:-s)*0.022);gr.add(kn);
+      const c=angW[cd];let d=angW[out]-c;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;
+      gr.rotation.y=c;w.leaves.push({g:gr,c,o:c+d*0.95,t:c});m.userData.win=w;kn.userData.win=w;clickables.push(m,kn);scene.add(gr);}
+    wardrobes.push(w);}
+  wardrobe(11.8,3.15,13.8,3.95,'-z');wardrobe(2.65,5.05,4.65,5.85,'+z');wardrobe(6.5,5.05,8.5,5.85,'+z');
   const labels:THREE.Sprite[]=[];
   function label(t:string,x:number,z:number){const c=document.createElement('canvas');c.width=320;c.height=72;const g=c.getContext('2d')!;g.fillStyle='rgba(255,255,255,0.88)';g.beginPath();if(g.roundRect)g.roundRect(4,8,312,56,14);else g.rect(4,8,312,56);g.fill();g.fillStyle='#2c2c2a';g.font='500 30px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(t,160,37);
   const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
@@ -270,5 +313,5 @@ export function buildHouse(scene: THREE.Scene): House {
   const c=new THREE.Mesh(new THREE.ConeGeometry(0.035,h,10),finMat);c.position.set(x-7,y+0.5+h/2,z-4.5);roofG.add(c);}
   finial(main.L,main.r,main.zm,1.0);finial(main.R,main.r,main.zm,1.0);finial(tho.L,tho.r,tho.zm,0.8);finial(sanh.L,sanh.r,sanh.zm,0.7);
   
-  return { solids, floors, tiles, occluders, doors, wcDoors, windows, beds, labels, clickables, roof: roofG, rack: { group: rackG, armL, armR } };
+  return { solids, floors, tiles, occluders, doors, wcDoors, windows, wardrobes, beds, seats, labels, clickables, roof: roofG, rack: { group: rackG, armL, armR } };
 }

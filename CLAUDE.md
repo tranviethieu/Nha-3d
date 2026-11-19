@@ -28,6 +28,12 @@ There are no tests.
 - **Doors:** only a fully closed door blocks movement (`collision.ts`). Bumping into one opens it.
 - **Windows:** unlike the original (glass drawn over solid walls), `wallWithHoles()` cuts each `WIN` opening out of the walls and WC tiles. Each window gets two outward-opening sashes, using the same `Leaf` hinge model as doors.
 - **Beds:** `bed()` records the beds in `beds`, and `lieDown()` lays the character face-up with its head at the headboard.
+- **Orientation (per the client):** the porch/sảnh side (plan x = 0) faces **east**, and the x = 14 wall faces **west**. The west wall has a window beside the washing machine and one beside the P. ngủ 3 bed. New windows are appended to `WIN`; don't reorder it, because `AWNING` is an index.
+- **Kitchen window (`AWNING` index in `WIN`):** a single top-hung sash. Its `Leaf` has `axis: 'x'`, so it swings out from the bottom. The frame-loop `ease` rotates around `l.axis ?? 'y'`.
+- **Wardrobes:** `wardrobe()` builds a hollow carcass (clothes rail, shelves), four hinged doors and one invisible solid covering its footprint. They live in `house.wardrobes` (same `Win` shape as windows) and are toggled with `setWin`.
+- **Seats:** `seat()` records kitchen chairs, sofa places and armchairs as hip positions plus a facing direction. `sitDown()` uses `restPose(…, true)`, which bends the knee joints (`kneeL`/`kneeR` in character.ts). `this.lying` holds both poses (`kind: 'lie' | 'sit'`).
+- **`nearest()`** weights candidates by whether the character is facing them. That lets the wardrobe win over the bed in the narrow gap between them.
+- **Third-person camera:** collides with door and wardrobe leaves as well as `occluders`.
 - **WC tile skins:** the WC tile layers are split at the doorways. In the original they ran across the openings, which blocked entry.
 - **`src/engine/dimensions.ts`:** the "Kích thước" overlay. `ROOM_DIMS` holds the real sizes and areas from the client's floor plan (14 × 9 m, facade at plan z = 0). Treat those numbers as the source of truth rather than recomputing them from the model. The cards are flat on the floor with depthTest off, and `faceCamera()` turns them in 90° steps every frame so they stay upright.
 - **`src/engine/rooms.ts`:** hand-written room rectangles in plan coordinates, used for the HUD room name and to auto-hide the roof.

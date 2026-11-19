@@ -135,6 +135,7 @@ export function buildDimensions(scene: THREE.Scene): Dimensions {
     [2.8, -0.45, 4.4, -0.45, '1.6 m'], [7.97, -0.45, 9.17, -0.45, '1.2 m'], [10.1, -0.45, 11.1, -0.45, '1.0 m'],
     [-0.45, 6.12, -0.45, 7.72, '1.6 m'],
     [5.37, 9.45, 6.37, 9.45, '1.0 m'], [9.53, 9.45, 10.73, 9.45, '1.2 m'], [11.33, 9.45, 11.93, 9.45, '0.6 m'], [12.81, 9.45, 13.41, 9.45, '0.6 m'],
+    [14.45, 5.25, 14.45, 5.95, '0.7 m'], [14.45, 0.9, 14.45, 2.1, '1.2 m'],
   ];
   for (const [ax, az, bx, bz, t] of WINDOWS) exterior.add(dimension(ax, az, bx, bz, t, Y_OUT, 0.45));
   const note = textCard([{ text: '14 m × 9 m phủ bì · mặt tiền phía trước', px: 40, weight: 600 }], 4.2);

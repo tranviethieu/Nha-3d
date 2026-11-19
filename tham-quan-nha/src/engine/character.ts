@@ -5,6 +5,8 @@ export interface Character {
   body: THREE.Group;
   legL: THREE.Group;
   legR: THREE.Group;
+  kneeL: THREE.Group;
+  kneeR: THREE.Group;
   armL: THREE.Group;
   armR: THREE.Group;
   shadow: THREE.Mesh;
@@ -23,10 +25,14 @@ export function makeCharacter(scene: THREE.Scene): Character {
 
   // Proportions: 1.70 m tall (top of hair), slim ~60 kg build
   const legL = limb(-0.08, 0.85), legR = limb(0.08, 0.85);
-  for (const l of [legL, legR]) {
-    add(l, new THREE.BoxGeometry(0.12, 0.8, 0.14), pants, 0, -0.4, 0);
-    add(l, new THREE.BoxGeometry(0.12, 0.06, 0.24), shoe, 0, -0.82, 0.04);
-  }
+  // thigh + shin with a knee joint (needed to sit); hip to sole = 0.85
+  const [kneeL, kneeR] = [legL, legR].map(l => {
+    add(l, new THREE.BoxGeometry(0.12, 0.43, 0.14), pants, 0, -0.215, 0);
+    const k = new THREE.Group(); k.position.set(0, -0.42, 0); l.add(k);
+    add(k, new THREE.BoxGeometry(0.115, 0.38, 0.13), pants, 0, -0.19, 0);
+    add(k, new THREE.BoxGeometry(0.12, 0.06, 0.24), shoe, 0, -0.40, 0.04);
+    return k;
+  });
   add(body, new THREE.BoxGeometry(0.32, 0.13, 0.18), pants, 0, 0.88, 0);
   add(body, new THREE.BoxGeometry(0.34, 0.46, 0.19), shirt, 0, 1.18, 0);
   add(body, new THREE.CylinderGeometry(0.045, 0.05, 0.07, 12), skin, 0, 1.44, 0);
@@ -53,7 +59,7 @@ export function makeCharacter(scene: THREE.Scene): Character {
   }));
   shadow.rotation.x = -Math.PI / 2;
   scene.add(shadow, root);
-  return { root, body, legL, legR, armL, armR, shadow };
+  return { root, body, legL, legR, kneeL, kneeR, armL, armR, shadow };
 }
 
 /** Walk / run / jump pose. `speed` in m/s, `phase` advances with time. */
@@ -62,10 +68,26 @@ export function poseCharacter(ch: Character, speed: number, phase: number, onGro
   const sw = Math.sin(phase) * (0.25 + 0.35 * Math.min(1, speed / 3.6)) * k;
   ch.legL.rotation.x = sw; ch.legR.rotation.x = -sw;
   ch.armL.rotation.x = -sw * 0.9; ch.armR.rotation.x = sw * 0.9;
+  // the knee bends while the leg swings back
+  ch.kneeL.rotation.x = Math.max(0, sw) * 1.1 + 0.05 * k; ch.kneeR.rotation.x = Math.max(0, -sw) * 1.1 + 0.05 * k;
   ch.body.position.y = Math.abs(Math.cos(phase)) * 0.035 * k + Math.sin(now / 600) * 0.004;
   ch.body.rotation.x = 0.06 * Math.min(1, speed / 3.6);
   if (!onGround) {
     ch.legL.rotation.x = -0.35; ch.legR.rotation.x = 0.25;
     ch.armL.rotation.x = ch.armR.rotation.x = -0.5;
+    ch.kneeL.rotation.x = 0.6; ch.kneeR.rotation.x = 0.3;
+  }
+}
+
+/** Hip height above the feet origin; a seated character is placed so the hips rest on the seat. */
+export const HIP = 0.85;
+/** Reset every joint (for lying down / sitting). */
+export function restPose(ch: Character, sit: boolean) {
+  for (const l of [ch.legL, ch.legR, ch.kneeL, ch.kneeR, ch.armL, ch.armR]) l.rotation.set(0, 0, 0);
+  ch.body.position.set(0, 0, 0); ch.body.rotation.set(0, 0, 0);
+  if (sit) {
+    ch.legL.rotation.x = ch.legR.rotation.x = -Math.PI / 2; // thighs forward
+    ch.kneeL.rotation.x = ch.kneeR.rotation.x = Math.PI / 2; // shins down
+    ch.armL.rotation.x = ch.armR.rotation.x = -0.45; // hands on the thighs
   }
 }

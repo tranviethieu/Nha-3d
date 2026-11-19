@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { buildHouse, toWorld, type Bed, type Door, type House, type Leaf, type Win } from './house';
-import { makeCharacter, poseCharacter, type Character } from './character';
+import { buildHouse, toWorld, type Bed, type Door, type House, type Leaf, type Seat, type Win } from './house';
+import { HIP, makeCharacter, poseCharacter, restPose, type Character } from './character';
 import { blocked, floorTop, leafSegment, STEP } from './collision';
 import { Minimap } from './minimap';
 import { roomAt } from './rooms';
@@ -16,6 +16,7 @@ export interface HudState {
   rackDown: boolean;
   anyDoorClosed: boolean;
   anyWindowClosed: boolean;
+  anyWardrobeClosed: boolean;
   /** Dimension overlay (room sizes, m², wall and window lengths) is shown. */
   dimsOn: boolean;
   // tour
@@ -27,6 +28,7 @@ export interface HudState {
   aerial: boolean;
   roofMode: RoofMode;
   lying: boolean;
+  sitting: boolean;
 }
 
 const WALK = 1.7, RUN = 3.6, GRAVITY = 9.8, JUMP = 3.6;
@@ -38,7 +40,7 @@ const BOUNDS = { x0: -14.5, x1: 12.5, z0: -10, z1: 10 };
 const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 type V3 = [number, number, number];
 
-type Interactable = { door: Door } | { win: Win } | { rack: true } | { bed: Bed };
+type Interactable = { door: Door } | { win: Win } | { wardrobe: Win } | { rack: true } | { bed: Bed } | { seat: Seat };
 
 /** Distance from a point to a rectangle (0 inside). */
 const rectDist = (x: number, z: number, r: { x0: number; x1: number; z0: number; z1: number }) =>
@@ -63,7 +65,8 @@ export class Game {
 
   // player (tour)
   private p = { x: START.x, z: START.z, y: -0.3, vy: 0, face: START.face, speed: 0, phase: 0, onGround: true };
-  private lying: { bed: Bed; back: { x: number; z: number; y: number } } | null = null;
+  /** Lying on a bed or sitting on a seat; `back` is where to stand up again. */
+  private lying: { kind: 'lie' | 'sit'; top: number; back: { x: number; z: number; y: number } } | null = null;
   private yaw = START.yaw; private pitch = 0.38; private fpPitch = 0; private dist = 4.2;
   private camTarget = new THREE.Vector3(START.x, 1.2, START.z);
   private firstPerson = false;
@@ -144,6 +147,7 @@ export class Game {
     if (this.dimsOn && this.mode === 'overview') this.roofOn = false;
     this.onToast(this.dimsOn ? 'Đang hiện kích thước (theo bản vẽ thực tế)' : 'Đã ẩn kích thước');
   };
+  toggleAllWardrobes = () => { const open = this.house.wardrobes.some(w => !w.open); this.house.wardrobes.forEach(w => this.setWin(w, open)); };
   toggleAllWindows = () => { const open = this.house.windows.some(w => !w.open); this.house.windows.forEach(w => this.setWin(w, open)); };
 
   // ======================= mode switching =======================
@@ -175,7 +179,7 @@ export class Game {
     if (this.firstPerson) this.firstPerson = false;
     else if (this.aerial) { this.aerial = false; this.firstPerson = true; }
     else { this.aerial = true; this.fitAerial(); }
-    this.fpPitch = this.lying ? 1.2 : 0;
+    this.fpPitch = this.lying?.kind === 'lie' ? 1.2 : 0;
   };
   toggleAerial = () => { this.aerial = !this.aerial; if (this.aerial) { this.firstPerson = false; this.fitAerial(); } };
   /** Start the aerial view far enough out that the whole house fits (portrait phones need more distance). */
@@ -197,6 +201,8 @@ export class Game {
     if ('rack' in n) { this.rackDown = !this.rackDown; this.onToast(this.rackDown ? 'Đã hạ giá bát' : 'Đã nâng giá bát'); }
     else if ('door' in n) this.setDoor(n.door, !n.door.open);
     else if ('win' in n) this.setWin(n.win, !n.win.open);
+    else if ('wardrobe' in n) this.setWin(n.wardrobe, !n.wardrobe.open);
+    else if ('seat' in n) this.sitDown(n.seat);
     else this.lieDown(n.bed);
   };
 
@@ -205,7 +211,7 @@ export class Game {
   private setWin(w: Win, open: boolean) { w.open = open; w.leaves.forEach(l => { l.t = open ? l.o : l.c; }); }
 
   private lieDown(bed: Bed) {
-    this.lying = { bed, back: { x: this.p.x, z: this.p.z, y: this.p.y } };
+    this.lying = { kind: 'lie', top: bed.top, back: { x: this.p.x, z: this.p.z, y: this.p.y } };
     this.p.speed = 0; this.p.vy = 0;
     const cx = (bed.x0 + bed.x1) / 2;
     // head 15 cm from the headboard; body extends 1.70 m toward the foot of the bed
@@ -214,12 +220,25 @@ export class Game {
     r.position.set(cx, bed.top + 0.11, feetZ);
     // face up, head toward the headboard (-z for 'N', +z for 'S')
     r.rotation.set(-Math.PI / 2, bed.head === 'N' ? 0 : Math.PI, 0, 'YXZ');
-    for (const l of [this.hero.legL, this.hero.legR, this.hero.armL, this.hero.armR]) l.rotation.set(0, 0, 0);
-    this.hero.body.position.set(0, 0, 0); this.hero.body.rotation.set(0, 0, 0);
+    restPose(this.hero, false);
     this.hero.shadow.visible = false;
     this.camTarget.set(cx, bed.top + 0.4, (bed.z0 + bed.z1) / 2);
     if (this.firstPerson) this.fpPitch = 1.2;
     this.onToast('Đang nằm trên giường — nhấn E hoặc phím di chuyển để dậy');
+  }
+
+  private sitDown(seat: Seat) {
+    this.lying = { kind: 'sit', top: seat.top, back: { x: this.p.x, z: this.p.z, y: this.p.y } };
+    this.p.speed = 0; this.p.vy = 0; this.p.face = seat.face;
+    const r = this.hero.root;
+    // hips (thigh centre ~7 cm above the seat) at the seat, facing away from the backrest
+    r.position.set(seat.x, seat.top + 0.07 - HIP, seat.z);
+    r.rotation.set(0, seat.face, 0, 'XYZ');
+    restPose(this.hero, true);
+    this.hero.shadow.visible = false;
+    this.yaw = seat.face + Math.PI; this.pitch = 0.3; this.fpPitch = 0;
+    this.camTarget.set(seat.x, seat.top + 0.75, seat.z);
+    this.onToast(`Đang ngồi ${seat.kind === 'sofa' ? 'sofa' : 'ghế'} — nhấn E hoặc phím di chuyển để đứng dậy`);
   }
 
   private standUp() {
@@ -234,25 +253,41 @@ export class Game {
   private nearest(): Interactable | null {
     const p = this.p;
     let best: Interactable | null = null, bd = 1.5;
-    const consider = (d: number, it: Interactable) => { if (d < bd) { bd = d; best = it; } };
+    // things in front of the character are preferred over things beside or behind it
+    const fx = Math.sin(p.face), fz = Math.cos(p.face);
+    const consider = (d: number, it: Interactable, tx?: number, tz?: number) => {
+      if (tx !== undefined && tz !== undefined) {
+        const l = Math.hypot(tx - p.x, tz - p.z);
+        if (l > 1e-3) d *= 1.25 - 0.55 * Math.max(0, ((tx - p.x) * fx + (tz - p.z) * fz) / l);
+      }
+      if (d < bd) { bd = d; best = it; }
+    };
     for (const d of this.house.doors) {
       const s = leafSegment(d, d.g.rotation.y);
       consider(Math.hypot(p.x - (s[0] + s[2]) / 2, p.z - (s[1] + s[3]) / 2), { door: d });
     }
     for (const w of this.house.windows) { const d = Math.hypot(p.x - w.x, p.z - w.z); if (d < 1.3) consider(d, { win: w }); }
+    for (const w of this.house.wardrobes) {
+      // distance to the 2 m front, not its centre
+      const cx = THREE.MathUtils.clamp(p.x, w.x - 1, w.x + 1), d = Math.hypot(p.x - cx, p.z - w.z);
+      if (d < 1.1) consider(d * 0.6, { wardrobe: w }, cx, w.z);
+    }
+    for (const s of this.house.seats) { const d = Math.hypot(p.x - s.x, p.z - s.z); if (d < 0.8) consider(d * 0.6, { seat: s }, s.x, s.z); }
     const dr = Math.hypot(p.x - RACK[0], p.z - RACK[1]);
     if (dr < 1.3) consider(dr, { rack: true });
     // beds win when you are right next to them
-    for (const b of this.house.beds) { const d = rectDist(p.x, p.z, b); if (d < 0.6) consider(d * 0.5, { bed: b }); }
+    for (const b of this.house.beds) { const d = rectDist(p.x, p.z, b); if (d < 0.6) consider(d * 0.5, { bed: b }, THREE.MathUtils.clamp(p.x, b.x0, b.x1), THREE.MathUtils.clamp(p.z, b.z0, b.z1)); }
     return best;
   }
 
   private promptFor(n: Interactable | null): string | null {
-    if (this.lying) return 'Đứng dậy';
+    if (this.lying) return this.lying.kind === 'sit' ? 'Đứng dậy' : 'Ngồi dậy';
     if (!n) return null;
     if ('rack' in n) return this.rackDown ? 'Nâng giá bát' : 'Hạ giá bát';
     if ('door' in n) return n.door.open ? 'Đóng cửa' : 'Mở cửa';
     if ('win' in n) return n.win.open ? 'Đóng cửa sổ' : 'Mở cửa sổ';
+    if ('wardrobe' in n) return n.wardrobe.open ? 'Đóng tủ quần áo' : 'Mở tủ quần áo';
+    if ('seat' in n) return n.seat.kind === 'sofa' ? 'Ngồi sofa' : 'Ngồi ghế';
     return 'Nằm lên giường';
   }
 
@@ -358,8 +393,8 @@ export class Game {
     const h = this.house;
 
     // doors, windows and the dish rack animate in both modes (same easing as the original)
-    const ease = (l: Leaf) => { l.g.rotation.y += (l.t - l.g.rotation.y) * Math.min(1, dt * 7); if (Math.abs(l.t - l.g.rotation.y) < 0.002) l.g.rotation.y = l.t; };
-    h.doors.forEach(ease); h.windows.forEach(w => w.leaves.forEach(ease));
+    const ease = (l: Leaf) => { const r = l.g.rotation, a = l.axis ?? 'y'; r[a] += (l.t - r[a]) * Math.min(1, dt * 7); if (Math.abs(l.t - r[a]) < 0.002) r[a] = l.t; };
+    h.doors.forEach(ease); h.windows.forEach(w => w.leaves.forEach(ease)); h.wardrobes.forEach(w => w.leaves.forEach(ease));
     const r = this.rackT += ((this.rackDown ? 1 : 0) - this.rackT) * Math.min(1, dt * 6);
     h.rack.group.position.set(-0.24 * r, -0.5 * r, 0);
     h.rack.armL.position.set(9.725 - 7 - 0.12 * r, 1.8 - 0.25 * r, 1.1 - 4.5); h.rack.armL.rotation.z = 0.45 * r;
@@ -387,9 +422,9 @@ export class Game {
 
     const hud: HudState = {
       mode: this.mode, roofOn: this.roofOn, rackDown: this.rackDown,
-      anyDoorClosed: h.doors.some(d => !d.open), anyWindowClosed: h.windows.some(w => !w.open), dimsOn: this.dimsOn,
+      anyDoorClosed: h.doors.some(d => !d.open), anyWindowClosed: h.windows.some(w => !w.open), anyWardrobeClosed: h.wardrobes.some(w => !w.open), dimsOn: this.dimsOn,
       room: room ?? 'Sân vườn', prompt: this.mode === 'tour' ? this.promptFor(n) : null,
-      firstPerson: this.firstPerson, aerial: this.aerial, roofMode: this.roofMode, lying: !!this.lying,
+      firstPerson: this.firstPerson, aerial: this.aerial, roofMode: this.roofMode, lying: this.lying?.kind === 'lie', sitting: this.lying?.kind === 'sit',
     };
     if (this.dims.group.visible) faceCamera(this.camera.getWorldDirection(new THREE.Vector3()));
     const key = JSON.stringify(hud);
@@ -450,7 +485,7 @@ export class Game {
     this.marker.visible = this.aerial;
     if (this.aerial) {
       const at = this.lying ? hero.root.position : new THREE.Vector3(p.x, p.y, p.z);
-      this.marker.position.set(at.x, (this.lying ? this.lying.bed.top : floorTop(this.house, p.x, p.z)) + 0.03, at.z);
+      this.marker.position.set(at.x, (this.lying ? this.lying.top : floorTop(this.house, p.x, p.z)) + 0.03, at.z);
       this.marker.scale.setScalar(1 + Math.sin(performance.now() / 300) * 0.08);
     }
     if (this.aerial) {
@@ -466,9 +501,11 @@ export class Game {
     const off = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch));
     // pull the camera in front of walls between it and the player
     this.raycaster.set(this.camTarget, off); this.raycaster.far = this.dist;
+    // door and wardrobe leaves block too (when open they have swung out of the way)
+    const leaves = [...this.house.doors, ...this.house.wardrobes.flatMap(w => w.leaves)].map(l => l.g.children[0]);
     const obs: THREE.Object3D[] = this.house.roof.visible
-      ? [...this.house.occluders, ...this.house.roof.children.filter(c => (c as THREE.Mesh).isMesh)]
-      : this.house.occluders;
+      ? [...this.house.occluders, ...leaves, ...this.house.roof.children.filter(c => (c as THREE.Mesh).isMesh)]
+      : [...this.house.occluders, ...leaves];
     const hit = this.raycaster.intersectObjects(obs, false)[0];
     const d = hit ? Math.max(0.35, hit.distance - 0.2) : this.dist;
     cam.position.copy(this.camTarget).addScaledVector(off, d);
