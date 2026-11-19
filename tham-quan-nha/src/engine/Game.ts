@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { CSS3DObject, CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 import { buildHouse, toWorld, type Bed, type Door, type House, type Leaf, type ObjInfo, type Seat, type Win } from './house';
-import { PlanMap, emptyLayout, fmtM, normalizeLayout, DOOR_SPECS, ROOM_DIMS, type Layout } from './layout';
+import { PlanMap, emptyLayout, fmtM, normalizeLayout, parseYouTube, DOOR_SPECS, ROOM_DIMS, TV_DEFAULT_URL, type Layout } from './layout';
 import { HIP, makeCharacter, poseCharacter, restPose, type Character } from './character';
 import { blocked, floorTop, leafSegment, STEP } from './collision';
 import { Minimap } from './minimap';
@@ -34,6 +35,8 @@ export interface HudState {
   houseSize: string;
   /** Outdoor lights on (evening ambience). */
   lightsOn: boolean;
+  /** The living-room TV is playing. */
+  tvOn: boolean;
 }
 
 const WALK = 1.7, RUN = 3.6, GRAVITY = 9.8, JUMP = 3.6;
@@ -43,7 +46,7 @@ const START = { x: SX, z: SZ, face: Math.PI / 2, yaw: -Math.PI / 2 };
 const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 type V3 = [number, number, number];
 
-type Interactable = { door: Door } | { win: Win } | { wardrobe: Win } | { rack: true } | { bed: Bed } | { seat: Seat };
+type Interactable = { door: Door } | { win: Win } | { wardrobe: Win } | { rack: true } | { bed: Bed } | { seat: Seat } | { tv: true };
 
 /** Distance from a point to a rectangle (0 inside). */
 const rectDist = (x: number, z: number, r: { x0: number; x1: number; z0: number; z1: number }) =>
@@ -52,7 +55,10 @@ const rectDist = (x: number, z: number, r: { x0: number; x1: number; z0: number;
 export class Game {
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(50, 1, 0.05, 200);
-  private renderer = new THREE.WebGLRenderer({ antialias: true });
+  // alpha: the TV screen punches a transparent hole through which the YouTube iframe (CSS3D layer below) shows
+  private renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  private css = new CSS3DRenderer();
+  private cssScene = new THREE.Scene();
   private controls: OrbitControls;
   private house: House;
   private hero: Character;
@@ -96,6 +102,10 @@ export class Game {
     this.scene.fog = new THREE.Fog(0xcfe0ea, 35, 80);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.localClippingEnabled = true;
+    // CSS3D layer (the TV's YouTube iframe) under the WebGL canvas; the canvas keeps all pointer input
+    this.css.domElement.style.cssText = 'position:absolute;inset:0;pointer-events:none';
+    this.renderer.domElement.style.cssText = 'position:absolute;inset:0';
+    container.appendChild(this.css.domElement);
     container.appendChild(this.renderer.domElement);
     this.house = buildHouse(this.scene);
     this.hero = makeCharacter(this.scene);
@@ -134,6 +144,7 @@ export class Game {
   /** Rebuild the house for a new layout (room stretches + furniture overrides). */
   setLayout(input: Layout) {
     const layout = normalizeLayout(input);
+    const tvWas = !!this.tv; this.tvOff(); // detach before the old screen is disposed
     if (this.lying) this.standUp();
     const keepDoors = this.house.doors.map(d => d.open), keepWins = this.house.windows.map(w => w.open);
     this.disposeTree(this.house.root); this.house.root.removeFromParent();
@@ -146,6 +157,7 @@ export class Game {
     this.minimap = new Minimap(this.mapCanvas, this.house, [this.map.houseW, this.map.houseD]);
     this.bounds = { x0: -14.5, x1: this.map.mx(19.5) - 7, z0: -10, z1: this.map.mz(14.5) - 4.5 };
     this.applyLights();
+    if (tvWas) this.tvOnWith(layout.tvUrl || TV_DEFAULT_URL); // re-attach to the rebuilt screen (maybe a new link)
     this.hudKey = '';
   }
   resetLayout() { this.setLayout(emptyLayout()); }
@@ -163,6 +175,45 @@ export class Game {
     const sky = on ? 0x1d2838 : 0xcfe0ea;
     (this.scene.background as THREE.Color).set(sky); (this.scene.fog as THREE.Fog).color.set(sky);
   }
+  // ======================= living-room TV (YouTube) =======================
+  /** The playing TV: the iframe as a CSS3D object behind the screen, whose material is swapped for a hole. */
+  private tv: { obj: CSS3DObject; iframe: HTMLIFrameElement; screenMat: THREE.Material | THREE.Material[]; url: string } | null = null;
+  private holeMat = new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0, blending: THREE.NoBlending, fog: false, toneMapped: false });
+  toggleTv = () => {
+    if (this.tv) { this.tvOff(); this.onToast('Đã tắt tivi'); return; }
+    const url = this.map.layout.tvUrl || TV_DEFAULT_URL;
+    if (!parseYouTube(url)) { this.onToast('Link YouTube của tivi không hợp lệ (Cài đặt → Vật thể)'); return; }
+    this.tvOnWith(url); this.onToast('Đang phát YouTube trên tivi — bấm vào tivi hoặc E để tắt');
+  };
+  private tvOnWith(url: string) {
+    const yt = parseYouTube(url); if (!yt) return;
+    const W = 1280, H = 720, screen = this.house.tvScreen;
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://www.youtube.com/embed/${yt.id}?autoplay=1&start=${yt.start}&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`;
+    iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+    iframe.style.cssText = `width:${W}px;height:${H}px;border:0;background:#000`;
+    // play with sound once the player is ready (the click that switched the TV on counts as the user gesture)
+    iframe.addEventListener('load', () => {
+      for (const func of ['playVideo', 'unMute']) iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args: [] }), '*');
+    });
+    const obj = new CSS3DObject(iframe);
+    // fit the screen in world space (the TV may have been moved / scaled / mirrored); it always faces -x
+    screen.updateWorldMatrix(true, false);
+    const bb = new THREE.Box3().setFromObject(screen), c = bb.getCenter(new THREE.Vector3()), size = bb.getSize(new THREE.Vector3());
+    obj.position.set(bb.min.x - 0.002, c.y, c.z);
+    obj.rotation.y = -Math.PI / 2;
+    obj.scale.set(size.z / W, size.y / H, 1);
+    this.cssScene.add(obj);
+    this.tv = { obj, iframe, screenMat: screen.material, url };
+    screen.material = this.holeMat;
+  }
+  private tvOff() {
+    if (!this.tv) return;
+    this.cssScene.remove(this.tv.obj); this.tv.obj.element.remove();
+    this.house.tvScreen.material = this.tv.screenMat;
+    this.tv = null;
+  }
+
   /** Number of eave downlights and wall sconces in the current build. */
   lightCounts() { return { downlights: this.house.lights.downlights, sconces: this.house.lights.sconces }; }
 
@@ -268,6 +319,7 @@ export class Game {
     else if ('win' in n) this.setWin(n.win, !n.win.open);
     else if ('wardrobe' in n) this.setWin(n.wardrobe, !n.wardrobe.open);
     else if ('seat' in n) this.sitDown(n.seat);
+    else if ('tv' in n) this.toggleTv();
     else this.lieDown(n.bed);
   };
 
@@ -338,6 +390,11 @@ export class Game {
       if (d < 1.1) consider(d * 0.6, { wardrobe: w }, cx, w.z);
     }
     for (const s of this.house.seats) { const d = Math.hypot(p.x - s.x, p.z - s.z); if (d < 0.8) consider(d * 0.6, { seat: s }, s.x, s.z); }
+    { // TV: within reach in front of the screen
+      const c = new THREE.Box3().setFromObject(this.house.tvScreen).getCenter(new THREE.Vector3()), d = Math.hypot(p.x - c.x, p.z - c.z);
+      // the TV unit is deep, so standing at it you are ~1.5 m from the screen; reach up to 2.4 m
+      if (d < 2.4 && p.x < c.x) consider(Math.min(1.4, d * 0.6), { tv: true });
+    }
     const dr = Math.hypot(p.x - this.house.rackPos[0], p.z - this.house.rackPos[1]);
     if (dr < 1.3) consider(dr, { rack: true });
     // beds win when you are right next to them
@@ -352,6 +409,7 @@ export class Game {
     if ('door' in n) return n.door.open ? 'Đóng cửa' : 'Mở cửa';
     if ('win' in n) return n.win.open ? 'Đóng cửa sổ' : 'Mở cửa sổ';
     if ('wardrobe' in n) return `${n.wardrobe.open ? 'Đóng' : 'Mở'} ${n.wardrobe.name ?? 'tủ'}`;
+    if ('tv' in n) return this.tv ? 'Tắt tivi' : 'Bật tivi (YouTube)';
     if ('seat' in n) return n.seat.kind === 'sofa' ? 'Ngồi sofa' : n.seat.kind === 'desk' ? 'Ngồi vào bàn học' : 'Ngồi ghế';
     return 'Nằm lên giường';
   }
@@ -374,7 +432,7 @@ export class Game {
   private resize = () => {
     const w = this.container.clientWidth, h = this.container.clientHeight;
     this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
-    this.renderer.setSize(w, h);
+    this.renderer.setSize(w, h); this.css.setSize(w, h);
   };
 
   /** factor > 1 moves the camera away. */
@@ -401,6 +459,7 @@ export class Game {
     if (u.rack) this.toggleRack();
     if (u.door) this.setDoor(u.door as Door, !(u.door as Door).open);
     if (u.win) this.setWin(u.win as Win, !(u.win as Win).open);
+    if (u.tv) this.toggleTv();
   }
 
   private bindInput() {
@@ -493,12 +552,13 @@ export class Game {
       anyDoorClosed: h.doors.some(d => !d.open), anyWindowClosed: h.windows.some(w => !w.open), anyWardrobeClosed: h.wardrobes.some(w => !w.open), dimsOn: this.dimsOn,
       room: room ?? (this.mode === 'tour' && this.p.z < -4.5 && this.p.z > -6.1 && this.p.x > -8.3 && this.p.x < this.map.mx(14.6) - 7 ? 'Lối đi bên hông' : 'Sân vườn'), prompt: this.mode === 'tour' ? this.promptFor(n) : null,
       firstPerson: this.firstPerson, aerial: this.aerial, roofMode: this.roofMode, lying: this.lying?.kind === 'lie', sitting: this.lying?.kind === 'sit',
-      houseSize: `${fmtM(this.map.houseD)} × ${fmtM(this.map.houseW)} m`, lightsOn: this.lightsOn,
+      houseSize: `${fmtM(this.map.houseD)} × ${fmtM(this.map.houseW)} m`, lightsOn: this.lightsOn, tvOn: !!this.tv,
     };
     if (this.dims.group.visible) faceCamera(this.camera.getWorldDirection(new THREE.Vector3()));
     const key = JSON.stringify(hud);
     if (key !== this.hudKey) { this.hudKey = key; this.onHud(hud); }
     this.renderer.render(this.scene, this.camera);
+    if (this.tv) this.css.render(this.cssScene, this.camera);
   };
 
   private updatePlayer(dt: number, now: number) {

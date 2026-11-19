@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Game } from '../engine/Game';
-import { COLOR_SPECS, LIGHT_SPACING, ROOM_DIMS, fmtM, type Layout, type ObjOverride, type OpeningOverride, type RoofOverride } from '../engine/layout';
+import { COLOR_SPECS, LIGHT_SPACING, ROOM_DIMS, TV_DEFAULT_URL, fmtM, parseYouTube, type Layout, type ObjOverride, type OpeningOverride, type RoofOverride } from '../engine/layout';
 
 export interface SaveStatus { kind: 'idle' | 'busy' | 'ok' | 'error'; text: string }
 
@@ -32,6 +32,24 @@ function ColorField({ value, onCommit }: { value: string; onCommit: (v: string) 
         onChange={e => { const c = e.target.value; setV(c); window.clearTimeout(timer.current); timer.current = window.setTimeout(() => onCommit(c), 120); }} />
       <code>{v}</code>
     </span>
+  );
+}
+
+/** YouTube link for the living-room TV (applied on Enter / blur; checked before it is used). */
+function TvLink({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+  const [v, setV] = useState(value || TV_DEFAULT_URL);
+  useEffect(() => { setV(value || TV_DEFAULT_URL); }, [value]);
+  const ok = !!parseYouTube(v);
+  const commit = () => { if (ok && v.trim() !== (value || TV_DEFAULT_URL)) onCommit(v.trim()); };
+  return (
+    <div className={`row ${value ? 'edited' : ''}`}>
+      <div className="row-head"><b><i className="ti ti-brand-youtube" aria-hidden="true" /> Tivi phòng khách</b>
+        {value && <button className="icon" title="Về video mặc định" onClick={() => onCommit('')}><i className="ti ti-arrow-back-up" /></button>}</div>
+      <label className="num"><span>Link YouTube (bật bằng nút "Bật tivi" trong Chi tiết, bấm vào tivi, hoặc E khi đứng trước tivi)</span>
+        <input type="url" value={v} onChange={e => setV(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); }} />
+      </label>
+      {!ok && <p className="note" style={{ color: '#c0392b' }}>Link chưa đúng dạng YouTube (youtube.com/watch?v=…, youtu.be/…).</p>}
+    </div>
   );
 }
 
@@ -245,6 +263,7 @@ export function Settings(p: Props) {
           </>
         ) : (
           <>
+            <TvLink value={layout.tvUrl ?? ''} onCommit={v => { const l = { ...layout }; if (!v || v === TV_DEFAULT_URL) delete l.tvUrl; else l.tvUrl = v; p.onChange(l); }} />
             <p className="note">Mỗi vật thể bám theo bức tường gần nhất khi phòng co giãn. Ngang = theo trục X (dọc mặt tiền), Dọc = theo trục Z.</p>
             {groups.map(g => (
               <section key={g.room}>

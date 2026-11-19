@@ -88,6 +88,8 @@ export function describeChanges(a: Layout, b: Layout, objects: ObjInfo[]): { edi
     edited.push(`Khoảng cách đèn dưới mái: ${arrow(sa, sb)}`);
     affected.push('Đèn âm trần dưới mái chính, mái phòng thờ, mái sảnh xếp lại đều theo khoảng cách mới (đèn hắt tường và đèn sảnh giữ nguyên)');
   }
+  // TV video
+  if ((a.tvUrl ?? '') !== (b.tvUrl ?? '')) edited.push(`Video trên tivi: ${a.tvUrl || 'mặc định'} → ${b.tvUrl || 'mặc định'}`);
   // colours
   for (const c of COLOR_SPECS) {
     const x = a.colors?.[c.key] ?? c.def, y = b.colors?.[c.key] ?? c.def;

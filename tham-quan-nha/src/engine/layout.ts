@@ -26,6 +26,8 @@ export interface Layout {
   mirror?: boolean;
   /** Outdoor lights: spacing (m) between the downlights under the eaves. */
   lights?: { spacing?: number };
+  /** YouTube link played on the living-room TV. */
+  tvUrl?: string;
 }
 /** Editable colours. Defaults follow the client's reference photo (white walls, charcoal mouldings, slate roof). */
 export const COLOR_SPECS = [
@@ -42,7 +44,7 @@ export interface RoofOverride { l?: number; w?: number; h?: number }
 export const emptyLayout = (): Layout => ({ rooms: {}, objects: {}, openings: {}, roof: {}, subRoofs: {}, colors: {} });
 /** Fill in fields missing from older saved layouts. */
 export const normalizeLayout = (l: Partial<Layout> | null | undefined): Layout =>
-  ({ rooms: l?.rooms ?? {}, objects: l?.objects ?? {}, openings: l?.openings ?? {}, roof: l?.roof ?? {}, subRoofs: l?.subRoofs ?? {}, colors: l?.colors ?? {}, ...(l?.mirror ? { mirror: true } : {}), ...(l?.lights ? { lights: l.lights } : {}) });
+  ({ rooms: l?.rooms ?? {}, objects: l?.objects ?? {}, openings: l?.openings ?? {}, roof: l?.roof ?? {}, subRoofs: l?.subRoofs ?? {}, colors: l?.colors ?? {}, ...(l?.mirror ? { mirror: true } : {}), ...(l?.lights ? { lights: l.lights } : {}), ...(l?.tvUrl ? { tvUrl: l.tvUrl } : {}) });
 
 export type Dir = '+x' | '-x' | '+z' | '-z';
 /** A hinged door in a wall. axis: the axis the opening runs along; at: the wall's centre line on the other axis;
@@ -226,6 +228,18 @@ export class PlanMap {
 }
 
 /** Format meters for labels: 2 decimals, trailing zeros dropped. */
+/** Default video on the living-room TV. */
+export const TV_DEFAULT_URL = 'https://www.youtube.com/watch?v=wNi1cHYFkwc&t=183s';
+/** Video id and start second from a YouTube link (watch?v=, youtu.be/, shorts/, embed/, live/; t= as 183, 183s or 3m3s). */
+export function parseYouTube(url: string): { id: string; start: number } | null {
+  const m = url.trim().match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([\w-]{11})/);
+  if (!m) return null;
+  const t = url.match(/[?&#](?:t|start)=([0-9hms]+)/)?.[1] ?? '0';
+  const hms = t.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+  const start = hms ? (+(hms[1] ?? 0)) * 3600 + (+(hms[2] ?? 0)) * 60 + (+(hms[3] ?? 0)) : 0;
+  return { id: m[1], start };
+}
+
 /** Default spacing of the eave downlights (m). */
 export const LIGHT_SPACING = 1.5;
 

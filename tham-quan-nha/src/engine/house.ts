@@ -41,6 +41,8 @@ export interface House {
   rack: { group: THREE.Group; armL: THREE.Mesh; armR: THREE.Mesh };
   /** Centre of the dish rack, WORLD (for the E prompt). */
   rackPos: [number, number];
+  /** The living-room TV screen (faces -x, the living room). */
+  tvScreen: THREE.Mesh;
   /** Outdoor lighting, switched by Game.setLights (all off / daylight after a build). */
   lights: HouseLights;
   /** World z the house is mirrored about times 2 (z -> mirrorZ - z), or null when not mirrored. */
@@ -280,6 +282,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   const stepMat=M(0xbdb6aa);
   if(hasDoor('d-bep'))box(5.9,-0.42,7.0,0,-0.3,-0.15,stepMat);if(hasDoor('d-hong'))box(14,3.95,14.42,5.05,-0.3,-0.15,stepMat); // steps outside the side doors
   const vz0=1.05,vz1=3.55,vh=2.8,bay=(vz1-vz0-0.2)/8;
+  let tvScreen!:THREE.Mesh; // living-room TV screen (faces -x); Game shows YouTube through it
   obj('vachTivi','Vách tivi + kệ tivi','Phòng khách',true,()=>{
   box(5.9,vz0,6.1,vz0+0.1,0,vh,darkWood);box(5.9,vz1-0.1,6.1,vz1,0,vh,darkWood);box(5.9,vz0,6.1,vz1,vh-0.12,vh,darkWood);
   box(5.92,vz0,6.1,vz1,0,0.65,darkWood);
@@ -291,7 +294,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   else if((j+k)%3===0){const o=new THREE.Mesh(new THREE.SphereGeometry(0.06,12,10),decoDark);o.position.set(6.0-7,h+0.085,zc);add(o);}});}
   box(5.45,0.95,5.92,3.65,0.25,0.62,darkWood);box(5.55,1.05,5.9,3.55,0,0.25,M(0x2a1a12),false);
   box(5.44,0.95,5.46,3.65,0.42,0.44,M(0x2a1a12),false);
-  box(5.85,1.55,5.9,3.05,0.85,1.7,M(0x111111));box(5.845,1.58,5.85,3.02,0.88,1.67,M(0x1f3550),false);});
+  box(5.85,1.55,5.9,3.05,0.85,1.7,M(0x111111));tvScreen=box(5.845,1.58,5.85,3.02,0.88,1.67,M(0x1f3550),false);});
   const wood=M(0x6b4430),fabric=M(0x2e2e30),cushion=M(0xd8d2c8),white=M(0xfafafa),blanket=M(0x9fb3c8),counter=M(0xd9bb8c),steel=new THREE.MeshStandardMaterial({color:0xc9ced3,roughness:0.3,metalness:0.6}),chrome=new THREE.MeshStandardMaterial({color:0xe6e9ec,roughness:0.15,metalness:0.9}),altar=M(0x8b2e2e),blue=M(0x6aa7d8),chairF=M(0x8e99a6),ceramic=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.25});
   const seat=(x:number,z:number,face:number,top:number,kind:Seat['kind'])=>seats.push({x:x-7,z:z-4.5,face,top,kind});
   obj('sofa','Sofa','Phòng khách',true,()=>{box(2.47,0.2,4.47,1.0,0,0.42,fabric);box(2.47,0.2,4.47,0.4,0.42,0.85,fabric);
@@ -451,6 +454,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
       if(b-a>0.8)[a+(b-a)*0.22,b-(b-a)*0.22].forEach(x=>o.push(lm(fx,new THREE.BoxGeometry(0.045,0.045,0.034),gold,x,ym,0,Math.PI/4)));}}
   const wcDoors=[doorById['d-wc1'],doorById['d-wc2']].filter(Boolean);
   clickables.push(...winLeaves);
+  tvScreen.userData.tv=true;clickables.push(tvScreen);
   const inner=M(0xd7b48c),cloth=[0x3d7cc9,0xc94f4f,0xe8e2d6,0x4f8a5b,0x2f3a4a,0xd9a441].map(M);
   /** 2 m wardrobe: open-front carcass with clothes on a rail and shelves, four doors opening toward `out`. */
   function wardrobe(x0:number,z0:number,x1:number,z1:number,out:'+z'|'-z'){
@@ -644,5 +648,5 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   }
   scene.updateMatrixWorld(true);
   const rb=new THREE.Box3().setFromObject(rackG),rc=rb.getCenter(new THREE.Vector3());
-  return { solids, floors, tiles, occluders, doors, wcDoors, windows, wardrobes, beds, seats, labels, clickables, roof: roofG, rack: { group: rackG, armL, armR }, rackPos: [rc.x, rc.z], root, objects, mirrorZ, lights };
+  return { solids, floors, tiles, occluders, doors, wcDoors, windows, wardrobes, beds, seats, labels, clickables, roof: roofG, rack: { group: rackG, armL, armR }, rackPos: [rc.x, rc.z], root, objects, mirrorZ, lights, tvScreen };
 }

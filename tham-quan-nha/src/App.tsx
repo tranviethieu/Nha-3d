@@ -111,6 +111,7 @@ export default function App() {
     { icon: 'ti-droplet', label: 'Xem lavabo', run: (x: Game) => x.viewLavabo() },
     { icon: 'ti-tools-kitchen-2', label: 'Xem bếp', run: (x: Game) => x.viewKitchen() },
     { icon: 'ti-device-tv', label: 'Xem vách tivi', run: (x: Game) => x.viewTV() },
+    { icon: hud?.tvOn ? 'ti-device-tv-off' : 'ti-brand-youtube', label: hud?.tvOn ? 'Tắt tivi' : 'Bật tivi (YouTube)', run: (x: Game) => x.toggleTv() },
     { icon: 'ti-window', label: hud?.anyWindowClosed === false ? 'Đóng cửa sổ' : 'Mở cửa sổ', run: (x: Game) => x.toggleAllWindows() },
     { icon: 'ti-box', label: hud?.anyWardrobeClosed === false ? 'Đóng các tủ' : 'Mở các tủ', run: (x: Game) => x.toggleAllWardrobes() },
     { icon: 'ti-arrows-vertical', label: hud?.rackDown ? 'Nâng giá bát' : 'Hạ giá bát', run: (x: Game) => x.toggleRack() },

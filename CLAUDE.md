@@ -111,3 +111,9 @@ There is no build, no package manager and no tests. To run it, open the file in 
   - **Sending:** `Chat.tsx` shrinks a picture to at most 1600 px (`shrink()`), uploads it with `uploadChatImage()` (REST `/storage/v1/object`, publishable key) and stores the public URL. A message may be a picture with no text. Pictures can also be pasted.
   - **Viewing:** clicking a thumbnail opens `Lightbox`, portalled to `<body>`, because the panel's backdrop-filter traps `position: fixed`. A click toggles fit / actual size.
   - **Before the SQL is run:** `listChat` falls back to selecting without `image_url`.
+- **Living-room TV (YouTube):**
+  - **Rendering:** `Game` has a `CSS3DRenderer` layer under the WebGL canvas, and the renderer has `alpha: true`. `toggleTv()` puts a YouTube embed iframe (CSS3DObject) exactly on `house.tvScreen` (world bbox; the screen always faces −x) and swaps the screen material for `holeMat` (opacity 0, NoBlending), which punches a transparent hole. Anything in front of the TV still occludes the video.
+  - **Input:** the canvas keeps all pointer input, so the player is driven only via `postMessage` (playVideo / unMute on load).
+  - **Rebuilds:** on `setLayout` the TV is detached before the old house is disposed and re-attached afterwards.
+  - **Link:** `Layout.tvUrl` (default `TV_DEFAULT_URL`), parsed by `parseYouTube`, edited in Settings → Vật thể.
+  - **Controls:** "Bật tivi" in Chi tiết, clicking the TV, or E within 2.4 m in front of it.
