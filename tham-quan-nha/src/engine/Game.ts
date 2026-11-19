@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { buildHouse, toWorld, type Bed, type Door, type House, type Leaf, type Seat, type Win } from './house';
+import { buildHouse, toWorld, type Bed, type Door, type House, type Leaf, type ObjInfo, type Seat, type Win } from './house';
+import { PlanMap, emptyLayout, fmtM, normalizeLayout, DOOR_SPECS, ROOM_DIMS, type Layout } from './layout';
 import { HIP, makeCharacter, poseCharacter, restPose, type Character } from './character';
 import { blocked, floorTop, leafSegment, STEP } from './collision';
 import { Minimap } from './minimap';
-import { roomAt } from './rooms';
+import { roomAt, setRoomMap } from './rooms';
 import { buildDimensions, faceCamera, type Dimensions } from './dimensions';
 
 export type Mode = 'overview' | 'tour';
@@ -29,14 +30,16 @@ export interface HudState {
   roofMode: RoofMode;
   lying: boolean;
   sitting: boolean;
+  /** Overall size of the (possibly edited) house, e.g. '9 × 14 m'. */
+  houseSize: string;
+  /** Outdoor lights on (evening ambience). */
+  lightsOn: boolean;
 }
 
 const WALK = 1.7, RUN = 3.6, GRAVITY = 9.8, JUMP = 3.6;
 const HEIGHT = 1.7, EYE = 1.58;
 const [SX, SZ] = toWorld(-3.4, 2.6); // in the yard, facing the front porch
 const START = { x: SX, z: SZ, face: Math.PI / 2, yaw: -Math.PI / 2 };
-const RACK = toWorld(9.78, 1.63);
-const BOUNDS = { x0: -14.5, x1: 12.5, z0: -10, z1: 10 };
 const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 type V3 = [number, number, number];
 
@@ -57,6 +60,8 @@ export class Game {
   private raycaster = new THREE.Raycaster();
   private mode: Mode = 'overview';
   private dims: Dimensions;
+  private map = new PlanMap();
+  private bounds = { x0: -14.5, x1: 12.5, z0: -10, z1: 10 };
   private dimsOn = false;
 
   // overview state
@@ -85,7 +90,7 @@ export class Game {
   private raf = 0; private last = performance.now(); private hudKey = '';
   private cleanups: (() => void)[] = [];
 
-  constructor(private container: HTMLElement, mapCanvas: HTMLCanvasElement, private onHud: (s: HudState) => void,
+  constructor(private container: HTMLElement, private mapCanvas: HTMLCanvasElement, private onHud: (s: HudState) => void,
     private onToast: (t: string) => void) {
     this.scene.background = new THREE.Color(0xcfe0ea);
     this.scene.fog = new THREE.Fog(0xcfe0ea, 35, 80);
@@ -112,6 +117,63 @@ export class Game {
     this.raf = requestAnimationFrame(this.frame);
   }
 
+  // ======================= editable layout =======================
+  get layout(): Layout { return this.map.layout; }
+  /** Furniture currently in the house (default and current sizes) for the settings panel. */
+  get objects(): ObjInfo[] { return this.house.objects; }
+  /** Room sizes as shown on the plan (figures + edits). */
+  roomSizes() { return ROOM_DIMS.map(r => ({ room: r.room, title: r.title, base: r, ...this.map.roomSize(r) })); }
+  /** Doors and windows with their current sizes, for the settings panel. */
+  openings() {
+    const doors = this.map.doors.map(d => ({ id: d.spec.id, label: d.spec.label, room: d.spec.room, kind: 'door' as const, w: d.w, h: d.h, sill: 0, hidden: d.hidden, base: DOOR_SPECS.find(s => s.id === d.spec.id)! }));
+    const wins = this.map.windows.map(w => ({ id: w.spec.id, label: w.spec.label, room: w.spec.room, kind: 'window' as const, w: w.w, h: w.h, sill: w.sill, hidden: w.hidden, base: w.spec }));
+    return { doors, wins };
+  }
+  /** Main roof size (length, width, rise) and the default for the current house. */
+  roofInfo() { return this.map.roofs; }
+  /** Rebuild the house for a new layout (room stretches + furniture overrides). */
+  setLayout(input: Layout) {
+    const layout = normalizeLayout(input);
+    if (this.lying) this.standUp();
+    const keepDoors = this.house.doors.map(d => d.open), keepWins = this.house.windows.map(w => w.open);
+    this.disposeTree(this.house.root); this.house.root.removeFromParent();
+    this.disposeTree(this.dims.group); this.dims.group.removeFromParent();
+    this.map = new PlanMap(layout);
+    this.house = buildHouse(this.scene, this.map, layout); setRoomMap(this.map, this.house.mirrorZ);
+    this.house.doors.forEach((d, i) => { if (keepDoors[i]) { d.open = true; d.t = d.o; d.g.rotation.y = d.o; } });
+    this.house.windows.forEach((w, i) => { if (keepWins[i]) this.setWin(w, true); });
+    this.dims = buildDimensions(this.scene, this.map, this.house.mirrorZ);
+    this.minimap = new Minimap(this.mapCanvas, this.house, [this.map.houseW, this.map.houseD]);
+    this.bounds = { x0: -14.5, x1: this.map.mx(19.5) - 7, z0: -10, z1: this.map.mz(14.5) - 4.5 };
+    this.applyLights();
+    this.hudKey = '';
+  }
+  resetLayout() { this.setLayout(emptyLayout()); }
+
+  // ======================= outdoor lights =======================
+  private lightsOn = false;
+  toggleLights = () => { this.lightsOn = !this.lightsOn; this.applyLights(); this.onToast(this.lightsOn ? 'Đã bật đèn (chiều tối)' : 'Đã tắt đèn'); };
+  /** Lights on = evening: dim sky and sun, bulbs bright, washes and sconce / porch lights on. */
+  private applyLights() {
+    const L = this.house.lights, on = this.lightsOn;
+    L.glows.forEach(g => { g.visible = on; });
+    L.bulbs.forEach(m => m.color.set(on ? 0xfff1c8 : 0x9a9a9a));
+    L.points.forEach(p => { p.light.intensity = on ? p.on : 0; });
+    L.hemi.intensity = (on ? 0.2 : 0.8) * Math.PI; L.sun.intensity = (on ? 0.08 : 0.7) * Math.PI;
+    const sky = on ? 0x1d2838 : 0xcfe0ea;
+    (this.scene.background as THREE.Color).set(sky); (this.scene.fog as THREE.Fog).color.set(sky);
+  }
+  /** Number of eave downlights and wall sconces in the current build. */
+  lightCounts() { return { downlights: this.house.lights.downlights, sconces: this.house.lights.sconces }; }
+
+  private disposeTree(o: THREE.Object3D) {
+    o.traverse(c => {
+      const m = c as THREE.Mesh;
+      m.geometry?.dispose();
+      (Array.isArray(m.material) ? m.material : m.material ? [m.material] : []).forEach(mt => { (mt as THREE.MeshBasicMaterial).map?.dispose(); mt.dispose(); });
+    });
+  }
+
   dispose() {
     cancelAnimationFrame(this.raf);
     this.cleanups.forEach(f => f());
@@ -127,6 +189,8 @@ export class Game {
 
   // ======================= overview actions (the original model's buttons) =======================
   private setView(p: V3, tg: V3 = [-1, 1.5, -1]) {
+    const M = this.house.mirrorZ; // presets follow a mirrored house
+    if (M !== null) { p = [p[0], p[1], M - p[2]]; tg = [tg[0], tg[1], M - tg[2]]; }
     this.camera.position.set(...p); this.controls.target.set(...tg); this.controls.update();
   }
   setRoof = (on: boolean) => { this.roofOn = on; };
@@ -189,8 +253,9 @@ export class Game {
   setStick = (x: number, y: number) => { this.stick.x = x; this.stick.y = y; };
   goHome = (toast = true) => {
     if (this.lying) this.standUp();
-    Object.assign(this.p, { x: START.x, z: START.z, y: -0.3, vy: 0, face: START.face, speed: 0 });
-    this.yaw = START.yaw; this.pitch = 0.38; this.camTarget.set(START.x, 1.2, START.z);
+    const sz = this.house.mirrorZ === null ? START.z : this.house.mirrorZ - START.z; // in front of the porch
+    Object.assign(this.p, { x: START.x, z: sz, y: -0.3, vy: 0, face: START.face, speed: 0 });
+    this.yaw = START.yaw; this.pitch = 0.38; this.camTarget.set(START.x, 1.2, sz);
     if (toast) this.onToast('Đã về trước cửa chính');
   };
   interact = () => {
@@ -238,7 +303,7 @@ export class Game {
     this.hero.shadow.visible = false;
     this.yaw = seat.face + Math.PI; this.pitch = 0.3; this.fpPitch = 0;
     this.camTarget.set(seat.x, seat.top + 0.75, seat.z);
-    this.onToast(`Đang ngồi ${seat.kind === 'sofa' ? 'sofa' : 'ghế'} — nhấn E hoặc phím di chuyển để đứng dậy`);
+    this.onToast(`Đang ngồi ${seat.kind === 'sofa' ? 'sofa' : seat.kind === 'desk' ? 'bàn học' : 'ghế'} — nhấn E hoặc phím di chuyển để đứng dậy`);
   }
 
   private standUp() {
@@ -269,11 +334,11 @@ export class Game {
     for (const w of this.house.windows) { const d = Math.hypot(p.x - w.x, p.z - w.z); if (d < 1.3) consider(d, { win: w }); }
     for (const w of this.house.wardrobes) {
       // distance to the 2 m front, not its centre
-      const cx = THREE.MathUtils.clamp(p.x, w.x - 1, w.x + 1), d = Math.hypot(p.x - cx, p.z - w.z);
+      const hw = w.half ?? 1, cx = THREE.MathUtils.clamp(p.x, w.x - hw, w.x + hw), d = Math.hypot(p.x - cx, p.z - w.z);
       if (d < 1.1) consider(d * 0.6, { wardrobe: w }, cx, w.z);
     }
     for (const s of this.house.seats) { const d = Math.hypot(p.x - s.x, p.z - s.z); if (d < 0.8) consider(d * 0.6, { seat: s }, s.x, s.z); }
-    const dr = Math.hypot(p.x - RACK[0], p.z - RACK[1]);
+    const dr = Math.hypot(p.x - this.house.rackPos[0], p.z - this.house.rackPos[1]);
     if (dr < 1.3) consider(dr, { rack: true });
     // beds win when you are right next to them
     for (const b of this.house.beds) { const d = rectDist(p.x, p.z, b); if (d < 0.6) consider(d * 0.5, { bed: b }, THREE.MathUtils.clamp(p.x, b.x0, b.x1), THREE.MathUtils.clamp(p.z, b.z0, b.z1)); }
@@ -286,8 +351,8 @@ export class Game {
     if ('rack' in n) return this.rackDown ? 'Nâng giá bát' : 'Hạ giá bát';
     if ('door' in n) return n.door.open ? 'Đóng cửa' : 'Mở cửa';
     if ('win' in n) return n.win.open ? 'Đóng cửa sổ' : 'Mở cửa sổ';
-    if ('wardrobe' in n) return n.wardrobe.open ? 'Đóng tủ quần áo' : 'Mở tủ quần áo';
-    if ('seat' in n) return n.seat.kind === 'sofa' ? 'Ngồi sofa' : 'Ngồi ghế';
+    if ('wardrobe' in n) return `${n.wardrobe.open ? 'Đóng' : 'Mở'} ${n.wardrobe.name ?? 'tủ'}`;
+    if ('seat' in n) return n.seat.kind === 'sofa' ? 'Ngồi sofa' : n.seat.kind === 'desk' ? 'Ngồi vào bàn học' : 'Ngồi ghế';
     return 'Nằm lên giường';
   }
 
@@ -301,8 +366,9 @@ export class Game {
       if (!hit) { p.x += mx; p.z += mz; }
       else if ('door' in hit) this.setDoor(hit.door, true);
     }
-    p.x = Math.min(BOUNDS.x1, Math.max(BOUNDS.x0, p.x));
-    p.z = Math.min(BOUNDS.z1, Math.max(BOUNDS.z0, p.z));
+    const B = this.bounds;
+    p.x = Math.min(B.x1, Math.max(B.x0, p.x));
+    p.z = Math.min(B.z1, Math.max(B.z0, p.z));
   }
 
   private resize = () => {
@@ -346,13 +412,15 @@ export class Game {
     on(window, 'keyup', (e: KeyboardEvent) => { this.keys[e.code] = false; });
     on(window, 'keydown', (e: KeyboardEvent) => {
       if (this.mode !== 'tour') return;
+      const t = e.target as HTMLElement | null; // typing in the settings panel
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       this.keys[e.code] = true;
       if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
       if (e.repeat && !MOVE_KEYS.includes(e.code)) return;
       if (this.lying && MOVE_KEYS.includes(e.code)) { this.standUp(); return; }
       const act: Record<string, () => void> = {
         KeyE: this.interact, KeyV: this.toggleView, KeyR: this.cycleRoof, KeyO: this.toggleAllDoors, KeyT: this.toggleAerial,
-        KeyH: () => this.goHome(), KeyK: this.toggleDims, Space: this.jump, Escape: this.exitTour,
+        KeyH: () => this.goHome(), KeyK: this.toggleDims, KeyL: this.toggleLights, Space: this.jump, Escape: this.exitTour,
       };
       act[e.code]?.();
     });
@@ -423,8 +491,9 @@ export class Game {
     const hud: HudState = {
       mode: this.mode, roofOn: this.roofOn, rackDown: this.rackDown,
       anyDoorClosed: h.doors.some(d => !d.open), anyWindowClosed: h.windows.some(w => !w.open), anyWardrobeClosed: h.wardrobes.some(w => !w.open), dimsOn: this.dimsOn,
-      room: room ?? 'Sân vườn', prompt: this.mode === 'tour' ? this.promptFor(n) : null,
+      room: room ?? (this.mode === 'tour' && this.p.z < -4.5 && this.p.z > -6.1 && this.p.x > -8.3 && this.p.x < this.map.mx(14.6) - 7 ? 'Lối đi bên hông' : 'Sân vườn'), prompt: this.mode === 'tour' ? this.promptFor(n) : null,
       firstPerson: this.firstPerson, aerial: this.aerial, roofMode: this.roofMode, lying: this.lying?.kind === 'lie', sitting: this.lying?.kind === 'sit',
+      houseSize: `${fmtM(this.map.houseD)} × ${fmtM(this.map.houseW)} m`, lightsOn: this.lightsOn,
     };
     if (this.dims.group.visible) faceCamera(this.camera.getWorldDirection(new THREE.Vector3()));
     const key = JSON.stringify(hud);
@@ -501,8 +570,8 @@ export class Game {
     const off = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch));
     // pull the camera in front of walls between it and the player
     this.raycaster.set(this.camTarget, off); this.raycaster.far = this.dist;
-    // door and wardrobe leaves block too (when open they have swung out of the way)
-    const leaves = [...this.house.doors, ...this.house.wardrobes.flatMap(w => w.leaves)].map(l => l.g.children[0]);
+    // door, wardrobe and window leaves block too (when open they have swung out of the way)
+    const leaves = [...this.house.doors, ...this.house.wardrobes.flatMap(w => w.leaves), ...this.house.windows.flatMap(w => w.leaves)].map(l => l.g.children[0]);
     const obs: THREE.Object3D[] = this.house.roof.visible
       ? [...this.house.occluders, ...leaves, ...this.house.roof.children.filter(c => (c as THREE.Mesh).isMesh)]
       : [...this.house.occluders, ...leaves];

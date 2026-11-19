@@ -16,8 +16,9 @@ export function floorTop(h: House, x: number, z: number, maxY = Infinity) {
 
 /** World-space segment of a door leaf at hinge angle `rot`. */
 export function leafSegment(d: Door, rot: number): [number, number, number, number] {
-  const a = d.g.position;
-  return [a.x, a.z, a.x + Math.cos(rot) * d.len, a.z - Math.sin(rot) * d.len];
+  const a = d.g.position, ax = a.x, az = a.z, bx = ax + Math.cos(rot) * d.len, bz = az - Math.sin(rot) * d.len;
+  // a mirrored house keeps door groups in its own (flipped) frame
+  return d.mirror === undefined ? [ax, az, bx, bz] : [ax, d.mirror - az, bx, d.mirror - bz];
 }
 
 export function segDist(px: number, pz: number, [ax, az, bx, bz]: [number, number, number, number]) {

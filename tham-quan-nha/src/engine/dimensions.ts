@@ -2,31 +2,9 @@
 // dimension lines per room, overall 14 x 9 m and window widths. Drawn flat on the floor, on top of
 // everything (depthTest off) so it reads like an annotated plan.
 import * as THREE from 'three';
+import { ROOM_DIMS, PlanMap, fmtM } from './layout';
 
-export interface RoomDim {
-  /** Key from rooms.ts (HUD room name) — used to show only the current room while touring. */
-  room: string;
-  title: string;
-  /** Interior rectangle in PLAN coords [x0, z0, x1, z1]. */
-  rect: [number, number, number, number];
-  w: string; d: string; area: string;
-}
-
-// Figures as printed on the floor plan (14 m x 9 m, facade = z 0). Hành lang has no area on the
-// plan, so it is computed from the model.
-export const ROOM_DIMS: RoomDim[] = [
-  { room: 'Sảnh', title: 'Hiên', rect: [0, 0, 1.0, 4.95], w: '1', d: '4.95', area: '4.95' },
-  { room: 'Phòng khách', title: 'Phòng khách', rect: [1.2, 0.2, 5.95, 4.95], w: '4.8', d: '4.75', area: '22.80' },
-  { room: 'Bếp + ăn', title: 'Bếp + ăn', rect: [5.95, 0.2, 9.95, 4.95], w: '3.95', d: '4.75', area: '18.76' },
-  { room: 'Phòng ngủ 3', title: 'P. ngủ 3', rect: [10.05, 0.2, 13.8, 3.95], w: '3.75', d: '3.75', area: '14.06' },
-  { room: 'Hành lang', title: 'Hành lang', rect: [10.05, 4.05, 13.8, 4.95], w: '3.75', d: '0.9', area: '≈3.38' },
-  { room: 'Phòng thờ', title: 'P. thờ', rect: [0.2, 5.05, 2.55, 8.8], w: '2.35', d: '3.75', area: '8.81' },
-  { room: 'Phòng ngủ 1', title: 'Phòng ngủ 1', rect: [2.65, 5.05, 6.4, 8.8], w: '3.75', d: '3.75', area: '14.06' },
-  { room: 'Phòng ngủ 2', title: 'Phòng ngủ 2', rect: [6.5, 5.05, 10.85, 8.8], w: '4.35', d: '3.75', area: '16.31' },
-  { room: 'Lavabo', title: 'Giặt + rửa', rect: [10.95, 5.05, 13.8, 6.2], w: '2.85', d: '1.15', area: '3.28' },
-  { room: 'WC1', title: 'WC1', rect: [10.95, 6.3, 12.325, 8.8], w: '1.38', d: '2.5', area: '3.44' },
-  { room: 'WC2', title: 'WC2', rect: [12.425, 6.3, 13.8, 8.8], w: '1.38', d: '2.5', area: '3.44' },
-];
+export { ROOM_DIMS, type RoomDim } from './layout';
 
 const INK = '#1f3f66', ACCENT = 0x2f6fb3, Y_IN = 0.06, Y_OUT = -0.27;
 
@@ -100,24 +78,25 @@ export interface Dimensions {
   exterior: THREE.Group;
 }
 
-export function buildDimensions(scene: THREE.Scene): Dimensions {
+export function buildDimensions(scene: THREE.Scene, map: PlanMap = new PlanMap(), mirrorZ: number | null = null): Dimensions {
   const group = new THREE.Group(), rooms = new Map<string, THREE.Group>(), exterior = new THREE.Group();
   cards.length = 0; // one overlay per scene (React StrictMode mounts the game twice in dev)
   group.visible = false;
 
   for (const r of ROOM_DIMS) {
-    const [x0, z0, x1, z1] = r.rect, w = x1 - x0, d = z1 - z0, rg = new THREE.Group();
+    const [x0, z0, x1, z1] = map.rect(r.rect), w = x1 - x0, d = z1 - z0, rg = new THREE.Group();
+    const sz = map.roomSize(r), W = sz.changed ? fmtM(sz.w) : r.w, D = sz.changed ? fmtM(sz.d) : r.d;
     const small = Math.min(w, d) < 1.6, off = small ? 0.2 : 0.35;
     // width along the facade-side wall, depth along the left wall
-    rg.add(dimension(x0, z0 + off, x1, z0 + off, `${r.w} m`, Y_IN, small ? 0.42 : 0.55));
-    rg.add(dimension(x0 + off, z0, x0 + off, z1, `${r.d} m`, Y_IN, small ? 0.42 : 0.55));
+    rg.add(dimension(x0, z0 + off, x1, z0 + off, `${W} m`, Y_IN, small ? 0.42 : 0.55));
+    rg.add(dimension(x0 + off, z0, x0 + off, z1, `${D} m`, Y_IN, small ? 0.42 : 0.55));
     // room card: name, size, area — turned to read along the long side of narrow rooms
     const vertical = w < 1.3 && d > w;
     const long = vertical ? d : w;
     const card = textCard([
       { text: r.title, px: 52, weight: 700 },
-      { text: `${r.w} × ${r.d} m`, px: 38 },
-      { text: `${r.area} m²`, px: 44, weight: 700 },
+      { text: `${W} × ${D} m`, px: 38 },
+      { text: `${sz.area} m²`, px: 44, weight: 700 },
     ], Math.min(1.7, long * 0.62, (vertical ? w : d) * 1.2));
     layFlat(card, ...(vertical ? [ALONG_Z.right, ALONG_Z.up] : [ALONG_X.right, ALONG_X.up]) as [THREE.Vector3, THREE.Vector3]);
     card.position.set((x0 + x1) / 2 - 7 + (vertical ? 0.06 : 0), Y_IN + 0.004, (z0 + z1) / 2 - 4.5 + (vertical ? 0 : 0.08));
@@ -128,23 +107,28 @@ export function buildDimensions(scene: THREE.Scene): Dimensions {
   }
 
   // overall size (outside the facade and the right side) and window widths, on the ground
-  exterior.add(dimension(0, -1.25, 14, -1.25, '14 m', Y_OUT, 0.7));
-  exterior.add(dimension(15.0, 0, 15.0, 9, '9 m', Y_OUT, 0.6));
-  const WINDOWS: [number, number, number, number, string][] = [
-    // [x0, z0, x1, z1] of the dimension line, label
-    [2.8, -0.45, 4.4, -0.45, '1.6 m'], [7.97, -0.45, 9.17, -0.45, '1.2 m'], [10.1, -0.45, 11.1, -0.45, '1.0 m'],
-    [-0.45, 6.12, -0.45, 7.72, '1.6 m'],
-    [5.37, 9.45, 6.37, 9.45, '1.0 m'], [9.53, 9.45, 10.73, 9.45, '1.2 m'], [11.33, 9.45, 11.93, 9.45, '0.6 m'], [12.81, 9.45, 13.41, 9.45, '0.6 m'],
-    [14.45, 5.25, 14.45, 5.95, '0.7 m'], [14.45, 0.9, 14.45, 2.1, '1.2 m'],
-  ];
-  for (const [ax, az, bx, bz, t] of WINDOWS) exterior.add(dimension(ax, az, bx, bz, t, Y_OUT, 0.45));
-  const note = textCard([{ text: '14 m × 9 m phủ bì · mặt tiền phía trước', px: 40, weight: 600 }], 4.2);
+  const HW = map.mx(14), HD = map.mz(9);
+  exterior.add(dimension(0, -1.0, HW, -1.0, `${fmtM(map.houseW)} m`, Y_OUT, 0.7));
+  const pathDim = dimension(-0.9, 0, -0.9, -1.5, '1.5 m', Y_OUT, 0.5); // side path width (site: never mirrored)
+  exterior.add(pathDim);
+  exterior.add(dimension(HW + 1, 0, HW + 1, HD, `${fmtM(map.houseD)} m`, Y_OUT, 0.6));
+  // window widths, on a line 0.45 m outside the wall each window is in
+  for (const { rect: r, w } of map.windows.filter(w => !w.hidden)) {
+    const t = `${fmtM(w)} m`;
+    if (r[2] - r[0] > r[3] - r[1]) { const z = r[1] < 4.5 ? -0.45 : HD + 0.45; exterior.add(dimension(map.mx(r[0]), z, map.mx(r[2]), z, t, Y_OUT, 0.45)); }
+    else { const x = r[0] < 7 ? -0.45 : HW + 0.45; exterior.add(dimension(x, map.mz(r[1]), x, map.mz(r[3]), t, Y_OUT, 0.45)); }
+  }
+  const note = textCard([{ text: `${fmtM(map.houseW)} m × ${fmtM(map.houseD)} m phủ bì · lối đi 1.5 m · tường rào cao 1.8 m`, px: 40, weight: 600 }], 4.6);
   layFlat(note, ALONG_X.right, ALONG_X.up);
   cards.push({ mesh: note, axis: 'z' });
-  note.position.set(7 - 7, Y_OUT, -1.85 - 4.5);
+  note.position.set(HW / 2 - 7, Y_OUT, -1.33 - 4.5);
   exterior.add(note);
   group.add(exterior);
 
+  if (mirrorZ !== null) {
+    const site = new Set<THREE.Object3D>(); pathDim.traverse(o => site.add(o));
+    group.traverse(o => { if ((o as THREE.Mesh).isMesh && !site.has(o)) o.position.z = mirrorZ - o.position.z; });
+  }
   scene.add(group);
   return { group, rooms, exterior };
 }

@@ -2,16 +2,17 @@ import type { House } from './house';
 import { leafSegment } from './collision';
 
 // Plan-space window drawn on the minimap (house + porch, with margin)
-const X0 = -1.6, Z0 = -0.7, SPAN_X = 16.2;
+const X0 = -1.6, Z0 = -0.7;
 
 export class Minimap {
   private ctx: CanvasRenderingContext2D;
   private base: HTMLCanvasElement;
   private s: number;
 
-  constructor(canvas: HTMLCanvasElement, private house: House) {
+  /** size: house width / depth in meters (default 14 x 9). */
+  constructor(canvas: HTMLCanvasElement, private house: House, size: [number, number] = [14, 9]) {
     this.ctx = canvas.getContext('2d')!;
-    this.s = canvas.width / SPAN_X;
+    this.s = Math.min(canvas.width / (size[0] + 2.2), canvas.height / (size[1] + 1.7));
     this.base = document.createElement('canvas');
     this.base.width = canvas.width; this.base.height = canvas.height;
     this.drawBase();
