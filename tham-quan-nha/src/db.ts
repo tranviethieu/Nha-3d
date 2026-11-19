@@ -46,13 +46,34 @@ export async function deleteLayout() {
 }
 
 // ---------------- chat + edit log (table public.house_chat, see ../../supabase/chat.sql) ----------------
-export interface ChatItem { id: number; kind: 'message' | 'log'; name: string; content: string; created_at: string }
+// Pictures go to the public Storage bucket 'chat-images' (../../supabase/chat-images.sql); the row keeps the URL.
+export interface ChatItem { id: number; kind: 'message' | 'log'; name: string; content: string; created_at: string; image_url?: string | null }
 
-/** Newest first. */
+/** Newest first. Works before chat-images.sql has been run (no image_url column yet): falls back for that call
+ *  only, so pictures show up as soon as the column exists, without reloading the page. */
 export async function listChat(limit = 200): Promise<ChatItem[]> {
-  return await (await call(`house_chat?select=id,kind,name,content,created_at&order=created_at.desc,id.desc&limit=${limit}`)).json() as ChatItem[];
+  const q = (cols: string) => call(`house_chat?select=${cols}&order=created_at.desc,id.desc&limit=${limit}`);
+  try { return await (await q('id,kind,name,content,created_at,image_url')).json() as ChatItem[]; }
+  catch (e) { if (!/image_url/.test((e as Error).message)) throw e; }
+  return await (await q('id,kind,name,content,created_at')).json() as ChatItem[];
 }
 
-export async function postChat(item: { kind: ChatItem['kind']; name: string; content: string }) {
+export async function postChat(item: { kind: ChatItem['kind']; name: string; content: string; image_url?: string }) {
   await call('house_chat', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(item) });
+}
+
+/** Upload a picture to the chat bucket; returns its public URL. */
+export async function uploadChatImage(file: Blob, ext: string): Promise<string> {
+  if (!dbConfigured) throw new Error('Chưa cấu hình Supabase.');
+  const path = `${new Date().toISOString().slice(0, 10)}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const res = await fetch(`${URL}/storage/v1/object/chat-images/${path}`, {
+    method: 'POST', headers: { apikey: KEY!, 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'false' }, body: file,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { message?: string; error?: string };
+    if (/bucket not found/i.test(body.message ?? '') || /bucket/i.test(body.error ?? ''))
+      throw new Error('Chưa có nơi lưu ảnh: chạy file supabase/chat-images.sql trong Supabase → SQL Editor.');
+    throw new Error(body.message || `Lỗi tải ảnh (${res.status})`);
+  }
+  return `${URL}/storage/v1/object/public/chat-images/${path}`;
 }

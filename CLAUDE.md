@@ -106,3 +106,8 @@ There is no build, no package manager and no tests. To run it, open the file in 
   - **Sconces and porch light:** 4 wall sconces (porch columns, both sides of the thờ window) with an up/down wash and a real PointLight. The big porch light gets a PointLight.
   - **Switching:** `Game.applyLights()` switches `house.lights` (glows, bulb colours, point intensities) and the ambience (dim hemi/sun, dusk sky). It is re-applied after every rebuild. Washes are fake, so dozens of downlights stay cheap.
   - **Settings:** the "Đèn" tab edits the spacing.
+- **Chat pictures:**
+  - **Storage:** public Storage bucket `chat-images` plus a `house_chat.image_url` column, both from `supabase/chat-images.sql`.
+  - **Sending:** `Chat.tsx` shrinks a picture to at most 1600 px (`shrink()`), uploads it with `uploadChatImage()` (REST `/storage/v1/object`, publishable key) and stores the public URL. A message may be a picture with no text. Pictures can also be pasted.
+  - **Viewing:** clicking a thumbnail opens `Lightbox`, portalled to `<body>`, because the panel's backdrop-filter traps `position: fixed`. A click toggles fit / actual size.
+  - **Before the SQL is run:** `listChat` falls back to selecting without `image_url`.

@@ -255,3 +255,25 @@ kbd {
 .row-head .hide-x { color: #c0392b; }
 .row-head .show-again { padding: 0 2px; white-space: nowrap; }
 .fields:has(> :only-child) { grid-template-columns: 1fr; }
+
+/* ---------------- pictures in the chat ---------------- */
+.chat-row .attach { font-size: 20px; color: var(--accent); }
+.chat-pic { position: relative; align-self: flex-start; }
+.chat-pic img { display: block; max-height: 110px; max-width: 200px; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; }
+.chat-pic .icon { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,.55); color: #fff; border-radius: 50%; padding: 3px; font-size: 14px; }
+.chat-img { display: block; margin-top: 6px; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.chat-img img { display: block; max-width: 100%; max-height: 220px; border-radius: 8px; border: 1px solid var(--line); }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.lightbox {
+  position: fixed; inset: 0; z-index: 100; background: rgba(8, 10, 14, .9); display: grid; place-items: center; overflow: auto; cursor: zoom-out;
+}
+.lightbox img { max-width: 96vw; max-height: 94vh; object-fit: contain; cursor: zoom-in; box-shadow: 0 8px 40px rgba(0,0,0,.5); border-radius: 6px; }
+.lightbox.full { place-items: start; }
+.lightbox.full img { max-width: none; max-height: none; cursor: zoom-out; margin: 16px; }
+.lb-tools { position: fixed; top: 14px; right: 14px; display: flex; gap: 8px; }
+.lb-tools a, .lb-tools button {
+  display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer;
+  background: rgba(255,255,255,.15); color: #fff; font-size: 20px; text-decoration: none;
+}
+.lb-tools a:hover, .lb-tools button:hover { background: rgba(255,255,255,.28); }

@@ -104,6 +104,7 @@ export default function App() {
     { icon: hud?.lightsOn ? 'ti-bulb-off' : 'ti-bulb', label: hud?.lightsOn ? 'Tắt đèn' : 'Bật đèn', run: (x: Game) => x.toggleLights() },
     { icon: 'ti-cube', label: 'Phối cảnh', run: (x: Game) => x.viewPerspective() },
     { icon: 'ti-door', label: hud?.anyDoorClosed === false ? 'Đóng tất cả cửa' : 'Mở tất cả cửa', run: (x: Game) => x.toggleAllDoors() },
+    { icon: 'ti-ruler-measure', label: hud?.dimsOn ? 'Ẩn kích thước' : 'Hiện kích thước', run: (x: Game) => x.toggleDims() },
   ];
   const detailButtons = [
     { icon: 'ti-bath', label: 'Xem nhà vệ sinh', run: (x: Game) => x.viewWC() },
@@ -113,7 +114,6 @@ export default function App() {
     { icon: 'ti-window', label: hud?.anyWindowClosed === false ? 'Đóng cửa sổ' : 'Mở cửa sổ', run: (x: Game) => x.toggleAllWindows() },
     { icon: 'ti-box', label: hud?.anyWardrobeClosed === false ? 'Đóng các tủ' : 'Mở các tủ', run: (x: Game) => x.toggleAllWardrobes() },
     { icon: 'ti-arrows-vertical', label: hud?.rackDown ? 'Nâng giá bát' : 'Hạ giá bát', run: (x: Game) => x.toggleRack() },
-    { icon: 'ti-ruler-measure', label: hud?.dimsOn ? 'Ẩn kích thước' : 'Hiện kích thước', run: (x: Game) => x.toggleDims() },
   ];
 
   const tourTools = [
