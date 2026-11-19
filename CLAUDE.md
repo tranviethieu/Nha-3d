@@ -117,3 +117,4 @@ There is no build, no package manager and no tests. To run it, open the file in 
   - **Rebuilds:** on `setLayout` the TV is detached before the old house is disposed and re-attached afterwards.
   - **Link:** `Layout.tvUrl` (default `TV_DEFAULT_URL`), parsed by `parseYouTube`, edited in Settings → Vật thể.
   - **Controls:** "Bật tivi" in Chi tiết, clicking the TV, or E within 2.4 m in front of it.
+- **Visitor character (`character.ts`):** a cartoon-style schoolgirl, 1.70 m tall: big head and eyes, fringe, red bow, sailor-collar shirt, pleated skirt, knee socks. Keep the joint layout (hip 0.85 = `HIP`, knee 0.43, shoulder 1.32), because the walk / sit / lie poses rely on it. `Character.skirt` is hinged at the waist, and `restPose(…, true)` lays it over the thighs when sitting.
