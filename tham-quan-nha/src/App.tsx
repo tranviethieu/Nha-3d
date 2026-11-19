@@ -102,6 +102,7 @@ export default function App() {
     { icon: 'ti-messages', label: 'Trao đổi', run: () => setChatOpen(o => !o) },
     { icon: 'ti-home', label: hud?.roofOn ? 'Ẩn mái' : 'Hiện mái', run: (x: Game) => x.toggleRoof() },
     { icon: hud?.lightsOn ? 'ti-bulb-off' : 'ti-bulb', label: hud?.lightsOn ? 'Tắt đèn' : 'Bật đèn', run: (x: Game) => x.toggleLights() },
+    { icon: 'ti-building', label: hud?.structure ? 'Ẩn kết cấu' : 'Kết cấu', run: (x: Game) => x.toggleStructure() },
     { icon: 'ti-cube', label: 'Phối cảnh', run: (x: Game) => x.viewPerspective() },
     { icon: 'ti-door', label: hud?.anyDoorClosed === false ? 'Đóng tất cả cửa' : 'Mở tất cả cửa', run: (x: Game) => x.toggleAllDoors() },
     { icon: 'ti-ruler-measure', label: hud?.dimsOn ? 'Ẩn kích thước' : 'Hiện kích thước', run: (x: Game) => x.toggleDims() },
@@ -140,6 +141,18 @@ export default function App() {
           <h1>Mô hình 3D</h1>
           <div className="room">Nhà {hud?.houseSize ?? '9 × 14 m'}</div>
           <p className="sub">WC1 và WC2 có sen cây đứng, ngoài WC1 có bàn lavabo đôi với gương</p>
+          {hud?.structure && (
+            <div className="struct-legend">
+              <div className="t">Kết cấu sơ bộ</div>
+              <ul>
+                <li><span className="sw" style={{ background: '#8f8b84' }} />Móng đơn 1,0 × 1,0 m, sâu 1,6 m · {hud.structure.footings} cái</li>
+                <li><span className="sw" style={{ background: '#b86a2c' }} />Dầm móng 220 × 400 · ~{hud.structure.groundBeam} m</li>
+                <li><span className="sw" style={{ background: '#c23b2e' }} />Cột 220 × 220 · {hud.structure.columns} cột</li>
+                <li><span className="sw" style={{ background: '#d99a1e' }} />Dầm giằng 220 × 300 · ~{hud.structure.tieBeam} m</li>
+              </ul>
+              <p>Lưới cột nhịp phổ biến 3,5–5 m: góc nhà, chỗ tường phòng gặp tường sau, và 2 khung dầm ngang qua phòng khách + bếp (tránh cửa). Vách mỏng đặt lên dầm. Nhịp dài quá 5 m tự thêm cột. Kích thước thép, bê tông cần kỹ sư kết cấu tính.</p>
+            </div>
+          )}
         </div>
         <div className="panel bar" ref={barRef}>
           <div className="bar-buttons">

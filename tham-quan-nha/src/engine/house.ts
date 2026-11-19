@@ -51,6 +51,8 @@ export interface House {
   root: THREE.Group;
   /** Furniture / fixtures that can be resized and moved in the settings panel. */
   objects: ObjInfo[];
+  /** Preliminary structural frame (footings, ground beams, columns, tie beams), hidden until shown; beam lengths in m. */
+  structure: { group: THREE.Group; columns: number; footings: number; groundBeam: number; tieBeam: number };
 }
 export interface HouseLights {
   /** Light washes on the walls (additive planes), shown only when the lights are on. */
@@ -206,7 +208,8 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     seg(cur,a1,y0,y1);}
   const wallMat=M(map.color('wall'));
   // WALLS (keep WALL_RIGID_X / Z in layout.ts in sync): continuous walls; doors and windows are cut out as holes
-  [[1.0,0,14,0.2],[1.0,0.2,1.2,4.95],[0,4.95,11.45,5.05],[13.2,4.95,14,5.05],[0,5.05,0.2,9],[0.2,8.8,13.8,9],[13.8,0,14,9],[9.95,0.2,10.05,3.95],[9.95,3.95,13.8,4.05],[2.55,5.05,2.65,8.8],[6.4,5.05,6.5,8.8],[10.85,5.05,10.95,8.8],[10.95,6.2,13.8,6.3],[12.325,6.3,12.425,8.8]].forEach(w=>wallWithHoles(w,0,H,wallMat,true));
+  const WALLS=[[1.0,0,14,0.2],[1.0,0.2,1.2,4.95],[0,4.95,11.45,5.05],[13.2,4.95,14,5.05],[0,5.05,0.2,9],[0.2,8.8,13.8,9],[13.8,0,14,9],[9.95,0.2,10.05,3.95],[9.95,3.95,13.8,4.05],[2.55,5.05,2.65,8.8],[6.4,5.05,6.5,8.8],[10.85,5.05,10.95,8.8],[10.95,6.2,13.8,6.3],[12.325,6.3,12.425,8.8]];
+  WALLS.forEach(w=>wallWithHoles(w,0,H,wallMat,true));
   const wcTile=M(0xe9ecee);
   [[10.95,6.3,10.97,8.8],[12.305,6.3,12.325,8.8],[12.425,6.3,12.445,8.8],[13.78,6.3,13.8,8.8],[10.97,6.3,12.305,6.32],[12.445,6.3,13.78,6.32],[10.97,8.78,12.305,8.8],[12.445,8.78,13.78,8.8]].forEach(w=>wallWithHoles(w,0,2.4,wcTile,false));
   // Mouldings (as in the client's reference photo), 4 cm proud of the outside wall faces and cut around doors /
@@ -295,15 +298,33 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   box(5.45,0.95,5.92,3.65,0.25,0.62,darkWood);box(5.55,1.05,5.9,3.55,0,0.25,M(0x2a1a12),false);
   box(5.44,0.95,5.46,3.65,0.42,0.44,M(0x2a1a12),false);
   box(5.85,1.55,5.9,3.05,0.85,1.7,M(0x111111));tvScreen=box(5.845,1.58,5.85,3.02,0.88,1.67,M(0x1f3550),false);});
-  const wood=M(0x6b4430),fabric=M(0x2e2e30),cushion=M(0xd8d2c8),white=M(0xfafafa),blanket=M(0x9fb3c8),counter=M(0xd9bb8c),steel=new THREE.MeshStandardMaterial({color:0xc9ced3,roughness:0.3,metalness:0.6}),chrome=new THREE.MeshStandardMaterial({color:0xe6e9ec,roughness:0.15,metalness:0.9}),altar=M(0x8b2e2e),blue=M(0x6aa7d8),chairF=M(0x8e99a6),ceramic=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.25});
+  const wood=M(0x6b4430),white=M(0xfafafa),blanket=M(0x9fb3c8),counter=M(0xd9bb8c),steel=new THREE.MeshStandardMaterial({color:0xc9ced3,roughness:0.3,metalness:0.6}),chrome=new THREE.MeshStandardMaterial({color:0xe6e9ec,roughness:0.15,metalness:0.9}),altar=M(0x8b2e2e),blue=M(0x6aa7d8),chairF=M(0x8e99a6),ceramic=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.25});
   const seat=(x:number,z:number,face:number,top:number,kind:Seat['kind'])=>seats.push({x:x-7,z:z-4.5,face,top,kind});
-  obj('sofa','Sofa','Phòng khách',true,()=>{box(2.47,0.2,4.47,1.0,0,0.42,fabric);box(2.47,0.2,4.47,0.4,0.42,0.85,fabric);
-    box(2.7,0.42,3.0,0.72,0.42,0.72,cushion);box(3.4,0.42,3.7,0.72,0.42,0.72,cushion);
+  // Living-room set in the walnut (gỗ óc chó) style of the client's photo: a walnut frame on a recessed plinth,
+  // wide flat wooden arms, a wooden back panel, dark-brown leather seat and back cushions; walnut coffee table with
+  // a smoked-glass top. Same footprints, heights (seat 0.42) and seats as before.
+  const walnut=new THREE.MeshStandardMaterial({color:0x6e4428,roughness:0.5}),walnutDk=M(0x3d2416),
+    leather=new THREE.MeshStandardMaterial({color:0x4b4039,roughness:0.55}),smoke=new THREE.MeshStandardMaterial({color:0x2a2622,roughness:0.08,metalness:0.3,transparent:true,opacity:0.8});
+  /** A walnut sofa / armchair filling [x0..x1] x [z0..z1], backrest on the z0 or z1 side, n seat cushions. */
+  const walnutSeat=(x0:number,z0:number,x1:number,z1:number,back:'z0'|'z1',n:number)=>{
+    const A=0.13,P=0.08,G=0.012,bz=(a:number,b:number):[number,number]=>back==='z0'?[z0+a,z0+b]:[z1-b,z1-a];
+    box(x0+0.07,z0+0.07,x1-0.07,z1-0.07,0,P,walnutDk,false);                        // recessed plinth
+    box(x0,z0,x1,z1,P,0.2,walnut);                                                   // frame
+    for(const [a,b] of [[x0,x0+A],[x1-A,x1]]){box(a,z0,b,z1,0.2,0.6,walnut);            // wooden arms
+      box(a-0.015,z0-0.015,b+0.015,z1+0.015,0.6,0.64,walnut);}
+    const [p0,p1]=bz(0,0.09);box(x0+A,p0,x1-A,p1,0.2,0.8,walnut);                     // wooden back panel
+    const w=(x1-x0-2*A)/n,[c0,c1]=bz(0.09,0.28),[s0,s1]=bz(0.09,z1-z0);
+    for(let k=0;k<n;k++){const a=x0+A+k*w+G,b=x0+A+(k+1)*w-G;
+      box(a,s0+G,b,s1-G,0.2,0.42,leather);                                           // seat cushion
+      box(a,c0,b,c1,0.42,0.82,leather);}};                                            // back cushion
+  obj('sofa','Sofa','Phòng khách',true,()=>{walnutSeat(2.47,0.2,4.47,1.0,'z0',3);
     seat(2.85,0.82,0,0.42,'sofa');seat(3.55,0.82,0,0.42,'sofa');seat(4.15,0.52,0,0.42,'sofa');});
-  obj('banTra','Bàn trà','Phòng khách',true,()=>box(3.08,1.58,4.28,2.28,0,0.42,darkWood));
-  obj('gheDon1','Ghế đơn trái','Phòng khách',true,()=>{box(2.58,3.29,3.33,4.04,0,0.42,fabric);box(2.58,3.84,3.33,4.04,0.42,0.85,fabric);seat(2.955,3.72,Math.PI,0.42,'sofa');});
-  obj('gheDon2','Ghế đơn phải','Phòng khách',true,()=>{box(4.04,3.29,4.79,4.04,0,0.42,fabric);box(4.04,3.84,4.79,4.04,0.42,0.85,fabric);seat(4.415,3.72,Math.PI,0.42,'sofa');});
-  obj('banGoc','Bàn góc','Phòng khách',true,()=>box(3.43,3.42,3.93,3.92,0,0.55,darkWood));
+  obj('banTra','Bàn trà','Phòng khách',true,()=>{box(3.16,1.66,4.2,2.2,0,0.06,walnutDk,false);
+    box(3.08,1.58,4.28,2.28,0.06,0.38,walnut);box(3.2,1.575,4.16,1.585,0.12,0.3,walnutDk,false);box(3.2,2.275,4.16,2.285,0.12,0.3,walnutDk,false);
+    box(3.1,1.6,4.26,2.26,0.38,0.42,smoke);});
+  obj('gheDon1','Ghế đơn trái','Phòng khách',true,()=>{walnutSeat(2.58,3.29,3.33,4.04,'z1',1);seat(2.955,3.72,Math.PI,0.42,'sofa');});
+  obj('gheDon2','Ghế đơn phải','Phòng khách',true,()=>{walnutSeat(4.04,3.29,4.79,4.04,'z1',1);seat(4.415,3.72,Math.PI,0.42,'sofa');});
+  obj('banGoc','Bàn góc','Phòng khách',true,()=>{box(3.47,3.46,3.89,3.88,0,0.06,walnutDk,false);box(3.43,3.42,3.93,3.92,0.06,0.51,walnut);box(3.43,3.42,3.93,3.92,0.51,0.55,walnutDk);});
   obj('banAn','Bàn ăn + 6 ghế','Bếp + ăn',true,()=>{box(6.05,2.1,7.65,3.0,0.72,0.77,wood);box(6.15,2.2,7.55,2.9,0,0.72,wood);
   [6.16,6.64,7.13].forEach(x=>{seat(x+0.21,1.78,0,0.45,'chair');seat(x+0.21,3.32,Math.PI,0.45,'chair');box(x,1.6,x+0.42,2.02,0,0.45,chairF);box(x,1.6,x+0.42,1.66,0.45,0.9,chairF);box(x,3.08,x+0.42,3.5,0,0.45,chairF);box(x,3.44,x+0.42,3.5,0.45,0.9,chairF);});});
   obj('ketBep','Kệ bếp (bếp, chậu rửa, hút mùi)','Bếp + ăn',true,()=>{box(7.89,0.2,9.95,0.8,0,0.85,counter);box(9.35,0.8,9.95,2.76,0,0.85,counter);
@@ -627,6 +648,81 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     sconce(-7,1.75,mz(tw[1])-0.4-4.5,'-x');sconce(-7,1.75,mz(tw[3])+0.4-4.5,'-x');
     const pl=new THREE.PointLight(0xfff0d0,0,6,1.4);pl.position.set(mx(0.05)-7,E3-0.6,mz(2.475)-4.5);scene.add(pl);lights.points.push({light:pl,on:2.2*Math.PI});
   }
+  // ---- structure (Kết cấu button): a preliminary frame derived from the current walls — pad footings under a
+  // column at every wall corner / junction (plus extra ones on long walls, kept out of door and window openings),
+  // ground beams (dầm móng) under every wall and a tie beam (dầm giằng) at the eaves. Hidden unless switched on.
+  // Built in EDITED coords so it follows room stretches; not part of collisions or clicks.
+  const structG=new THREE.Group();structG.visible=false;scene.add(structG);
+  const SM={foot:M(0x8f8b84),gb:M(0xb86a2c),col:M(0xc23b2e),tie:M(0xd99a1e)};
+  const sEdge=new THREE.LineBasicMaterial({color:0x2a2a2a,transparent:true,opacity:0.6});
+  const sbox=(x0:number,z0:number,x1:number,z1:number,y0:number,y1:number,mat:THREE.Material)=>{
+    const g=new THREE.BoxGeometry(Math.abs(x1-x0),y1-y0,Math.abs(z1-z0)),m=new THREE.Mesh(g,mat);
+    m.position.set((x0+x1)/2-7,(y0+y1)/2,(z0+z1)/2-4.5);structG.add(m);
+    const e=new THREE.LineSegments(new THREE.EdgesGeometry(g),sEdge);e.position.copy(m.position);structG.add(e);};
+  const structure={group:structG,columns:0,footings:0,groundBeam:0,tieBeam:0};
+  {
+    const C=0.22,MAXSPAN=5.0,FOOT=1.0;
+    const Y={foot0:-1.6,foot1:-1.3,gb0:-0.7,gb1:-0.3,tie0:E1-0.3,tie1:E1};
+    // wall centre lines in default plan coords: axis 'x' = runs along x at z = at
+    type Line={axis:'x'|'z';at:number;a0:number;a1:number};
+    const lines:Line[]=WALLS.map(w=>(w[2]-w[0])>=(w[3]-w[1])?{axis:'x',at:(w[1]+w[3])/2,a0:w[0],a1:w[2]}:{axis:'z',at:(w[0]+w[2])/2,a0:w[1],a1:w[3]});
+    const pts:[number,number][]=[];
+    const addPt=(x:number,z:number)=>{if(!pts.some(p=>Math.abs(p[0]-x)<0.3&&Math.abs(p[1]-z)<0.3))pts.push([x,z]);};
+    // openings on a line (default coords, along the line), to keep columns out of them
+    const holesOn=(l:Line)=>HOLES.filter(h=>l.axis==='x'?h[1]<=l.at&&h[3]>=l.at:h[0]<=l.at&&h[2]>=l.at)
+      .map(h=>l.axis==='x'?[h[0],h[2]]:[h[1],h[3]]).filter(([p,q])=>q>l.a0&&p<l.a1);
+    const freeOn=(l:Line,a:number)=>!holesOn(l).some(([p,q])=>a>p-C/2-0.05&&a<q+C/2+0.05);
+    /** The free position nearest to t (within [lo, hi]) on all the given lines. */
+    const nudge=(t:number,ls:Line[],lo=-Infinity,hi=Infinity)=>{
+      for(let d=0;d<=1.5;d+=0.05)for(const c of [t-d,t+d])if(c>lo&&c<hi&&ls.every(l=>freeOn(l,c)))return c;return null;};
+    const mapA=(l:Line,a:number)=>l.axis==='x'?mx(a):mz(a);
+    // Column grid (a frame with the usual 3.5–5 m spans, not a column at every wall junction): the outside corners,
+    // where the room walls meet the back wall, and two cross frames through the open living room + kitchen (one in
+    // the middle, one on the bedroom-3 wall x = 10 carried on to the middle wall), each with a column at both ends
+    // and a beam across. The middle wall (z = 5) is carried by those frames; thin partitions (WC, the corridor
+    // stub, bedroom 3's inner walls, the x = 10.9 wall's front end) just sit on the beams.
+    const facade:Line={axis:'x',at:0.1,a0:1.0,a1:14},spine:Line={axis:'x',at:5.0,a0:0,a1:11.45};
+    for(const p of [[1.1,0.1],[13.9,0.1],[13.9,4],[0.1,5],[1.1,5],[0.1,8.9],[2.6,8.9],[6.45,8.9],[10.9,8.9],[13.9,8.9]])addPt(p[0],p[1]);
+    const cross:Line[]=[];
+    const mid=nudge(1.1+(10-1.1)/2,[facade,spine],2.5,8.5);
+    if(mid!==null){addPt(mid,0.1);addPt(mid,5.0);cross.push({axis:'z',at:mid,a0:0.1,a1:5.0});}
+    addPt(10,0.1);
+    const x10=nudge(10,[spine],9.5,10.6);if(x10!==null){addPt(x10,5.0);cross.push({axis:'z',at:x10,a0:4.0,a1:5.0});}
+    // a column on the open beams and outside walls wherever a span grows past MAXSPAN (room stretched)
+    for(const l of [...lines,...cross]){
+      const on=pts.filter(p=>Math.abs((l.axis==='x'?p[1]:p[0])-l.at)<0.05).map(p=>l.axis==='x'?p[0]:p[1]).sort((p,q)=>p-q);
+      for(let i=0;i+1<on.length;i++){
+        const s0=on[i],s1=on[i+1],n=Math.ceil((mapA(l,s1)-mapA(l,s0))/MAXSPAN);
+        for(let k=1;k<n;k++){const c=nudge(s0+(s1-s0)*k/n,[l],s0+0.8,s1-0.8);if(c!==null)l.axis==='x'?addPt(c,l.at):addPt(l.at,c);}}
+    }
+    lines.push(...cross);
+    // porch columns stand on their own footings, tied back to the house by ground beams
+    const porch:[number,number][]=[[-0.625,0.175],[-0.625,4.775]];
+    // footings + columns (mapped centres; sizes stay real)
+    // The middle wall (and any 110 wall running along x) is built flush with the FRONT face of its columns, so the
+    // living room / kitchen / corridor side is flat: the column (and the beams on that line) shift towards the
+    // bedrooms and stick out ~110 mm there only, shown as a pilaster (trụ áp tường) in the wall colour.
+    const thinX=(x:number,z:number)=>WALLS.find(w=>(w[3]-w[1])<0.15&&(w[2]-w[0])>(w[3]-w[1])&&Math.abs((w[1]+w[3])/2-z)<0.02&&x>=w[0]-0.01&&x<=w[2]+0.01);
+    const colZ=(x:number,z:number)=>{const w=thinX(x,z);return w?mz(w[1])+C/2:mz(z);};
+    for(const [x,z] of pts){const X=mx(x),Z=colZ(x,z);
+      sbox(X-FOOT/2,Z-FOOT/2,X+FOOT/2,Z+FOOT/2,Y.foot0,Y.foot1,SM.foot);
+      sbox(X-C/2,Z-C/2,X+C/2,Z+C/2,Y.foot1,Y.tie1,SM.col);structure.columns++;structure.footings++;}
+    noMap=true;
+    for(const [x,z] of pts){
+      if(!WALLS.some(w=>Math.min(w[2]-w[0],w[3]-w[1])<0.15&&x>=w[0]-0.01&&x<=w[2]+0.01&&z>=w[1]-0.01&&z<=w[3]+0.01))continue;
+      const X=mx(x),Z=colZ(x,z),f=thinX(x,z)?0.003:0;box(X-C/2,Z-C/2+f,X+C/2,Z+C/2,0,Y.tie1,wallMat,true);} // flush face: 3 mm behind, no z-fight
+    noMap=false;
+    for(const [x,z] of porch){const X=mx(x),Z=mz(z);
+      sbox(X-FOOT/2,Z-FOOT/2,X+FOOT/2,Z+FOOT/2,Y.foot0,Y.foot1,SM.foot);
+      sbox(X-C/2,Z-C/2,X+C/2,Z+C/2,Y.foot1,PC,SM.col);structure.columns++;structure.footings++;}
+    // beams along every wall line; the eave tie beam on every wall
+    const beam=(l:Line,y0:number,y1:number,mat:THREE.Material)=>{
+      const p=mapA(l,l.a0),q=mapA(l,l.a1),c=l.axis==='x'?colZ((l.a0+l.a1)/2,l.at):mx(l.at);
+      if(l.axis==='x')sbox(p,c-C/2,q,c+C/2,y0,y1,mat);else sbox(c-C/2,p,c+C/2,q,y0,y1,mat);return q-p;};
+    for(const l of lines){structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);structure.tieBeam+=beam(l,Y.tie0,Y.tie1,SM.tie);}
+    for(const l of [{axis:'z',at:-0.625,a0:0.175,a1:4.775},{axis:'x',at:0.175,a0:-0.625,a1:1.1},{axis:'x',at:4.775,a0:-0.625,a1:1.1}] as Line[])
+      {structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);structure.tieBeam+=beam(l,PC,PC+0.3,SM.tie);}
+  }
   // ---- mirror front-to-back (Cài đặt → Đảo ngược): flip the house group, then every recorded world coordinate.
   // The site (ground, side path, boundary wall, ditch and their labels) is moved out of the flipped group so it stays.
   let mirrorZ:number|null=null;
@@ -648,5 +744,5 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   }
   scene.updateMatrixWorld(true);
   const rb=new THREE.Box3().setFromObject(rackG),rc=rb.getCenter(new THREE.Vector3());
-  return { solids, floors, tiles, occluders, doors, wcDoors, windows, wardrobes, beds, seats, labels, clickables, roof: roofG, rack: { group: rackG, armL, armR }, rackPos: [rc.x, rc.z], root, objects, mirrorZ, lights, tvScreen };
+  return { solids, floors, tiles, occluders, doors, wcDoors, windows, wardrobes, beds, seats, labels, clickables, roof: roofG, rack: { group: rackG, armL, armR }, rackPos: [rc.x, rc.z], root, objects, mirrorZ, lights, tvScreen, structure };
 }

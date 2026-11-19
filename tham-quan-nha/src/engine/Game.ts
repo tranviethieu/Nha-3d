@@ -37,6 +37,8 @@ export interface HudState {
   lightsOn: boolean;
   /** The living-room TV is playing. */
   tvOn: boolean;
+  /** Structural frame shown (house ghosted): counts for the legend, or null when hidden. */
+  structure: { columns: number; footings: number; groundBeam: number; tieBeam: number } | null;
 }
 
 const WALK = 1.7, RUN = 3.6, GRAVITY = 9.8, JUMP = 3.6;
@@ -156,7 +158,7 @@ export class Game {
     this.dims = buildDimensions(this.scene, this.map, this.house.mirrorZ);
     this.minimap = new Minimap(this.mapCanvas, this.house, [this.map.houseW, this.map.houseD]);
     this.bounds = { x0: -14.5, x1: this.map.mx(19.5) - 7, z0: -10, z1: this.map.mz(14.5) - 4.5 };
-    this.applyLights();
+    this.applyLights(); this.ghost.clear(); this.applyStructure();
     if (tvWas) this.tvOnWith(layout.tvUrl || TV_DEFAULT_URL); // re-attach to the rebuilt screen (maybe a new link)
     this.hudKey = '';
   }
@@ -175,6 +177,33 @@ export class Game {
     const sky = on ? 0x1d2838 : 0xcfe0ea;
     (this.scene.background as THREE.Color).set(sky); (this.scene.fog as THREE.Fog).color.set(sky);
   }
+  // ======================= structural frame (móng, dầm móng, cột, dầm giằng) =======================
+  private structOn = false;
+  /** Materials made see-through while the frame is shown, with what to restore. */
+  private ghost = new Map<THREE.Material, { transparent: boolean; opacity: number; depthWrite: boolean }>();
+  toggleStructure = () => {
+    this.structOn = !this.structOn; this.applyStructure();
+    this.onToast(this.structOn ? 'Kết cấu sơ bộ theo tường hiện tại — cần kỹ sư kết cấu tính toán lại' : 'Đã ẩn kết cấu');
+  };
+  /** Show the frame and ghost everything else in the house (walls, ground, furniture) so the buried parts show. */
+  private applyStructure() {
+    const S = this.house.structure, on = this.structOn;
+    S.group.visible = on;
+    if (on) {
+      this.house.root.traverse(o => {
+        if (o === S.group || !(o as THREE.Mesh).material) return;
+        let p: THREE.Object3D | null = o; while (p && p !== S.group) p = p.parent; if (p) return;
+        for (const mt of [(o as THREE.Mesh).material].flat() as THREE.Material[]) {
+          if (this.ghost.has(mt) || mt.blending === THREE.NoBlending) continue;
+          this.ghost.set(mt, { transparent: mt.transparent, opacity: mt.opacity, depthWrite: mt.depthWrite });
+          mt.transparent = true; mt.opacity = Math.min(mt.opacity, 0.13); mt.depthWrite = false; mt.needsUpdate = true;
+        }
+      });
+    } else {
+      this.ghost.forEach((v, mt) => { Object.assign(mt, v); mt.needsUpdate = true; }); this.ghost.clear();
+    }
+  }
+
   // ======================= living-room TV (YouTube) =======================
   /** The playing TV: the iframe as a CSS3D object behind the screen, whose material is swapped for a hole. */
   private tv: { obj: CSS3DObject; iframe: HTMLIFrameElement; screenMat: THREE.Material | THREE.Material[]; url: string } | null = null;
@@ -529,7 +558,7 @@ export class Game {
 
     let room: string | null = null, n: Interactable | null = null;
     if (this.mode === 'overview') {
-      h.roof.visible = this.roofOn;
+      h.roof.visible = this.roofOn && !this.structOn;
       h.labels.forEach(s => { s.visible = !this.roofOn && !this.dimsOn; });
       this.dims.group.visible = this.dimsOn && !this.roofOn;
       this.dims.rooms.forEach(g => { g.visible = true; }); this.dims.exterior.visible = true;
@@ -553,6 +582,7 @@ export class Game {
       room: room ?? (this.mode === 'tour' && this.p.z < -4.5 && this.p.z > -6.1 && this.p.x > -8.3 && this.p.x < this.map.mx(14.6) - 7 ? 'Lối đi bên hông' : 'Sân vườn'), prompt: this.mode === 'tour' ? this.promptFor(n) : null,
       firstPerson: this.firstPerson, aerial: this.aerial, roofMode: this.roofMode, lying: this.lying?.kind === 'lie', sitting: this.lying?.kind === 'sit',
       houseSize: `${fmtM(this.map.houseD)} × ${fmtM(this.map.houseW)} m`, lightsOn: this.lightsOn, tvOn: !!this.tv,
+      structure: this.structOn ? (({ columns, footings, groundBeam, tieBeam }) => ({ columns, footings, groundBeam: Math.round(groundBeam), tieBeam: Math.round(tieBeam) }))(h.structure) : null,
     };
     if (this.dims.group.visible) faceCamera(this.camera.getWorldDirection(new THREE.Vector3()));
     const key = JSON.stringify(hud);
