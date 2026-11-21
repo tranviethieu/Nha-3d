@@ -43,12 +43,13 @@ export interface HudState {
 
 const WALK = 1.7, RUN = 3.6, GRAVITY = 9.8, JUMP = 3.6;
 const HEIGHT = 1.7, EYE = 1.58;
+const roomTitle = (r: string) => ROOM_DIMS.find(d => d.room === r)?.title ?? r;
 const [SX, SZ] = toWorld(-3.4, 2.6); // in the yard, facing the front porch
 const START = { x: SX, z: SZ, face: Math.PI / 2, yaw: -Math.PI / 2 };
 const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 type V3 = [number, number, number];
 
-type Interactable = { door: Door } | { win: Win } | { wardrobe: Win } | { rack: true } | { bed: Bed } | { seat: Seat } | { tv: true };
+type Interactable = { door: Door } | { win: Win } | { wardrobe: Win } | { rack: true } | { bed: Bed } | { seat: Seat } | { tv: true } | { lamp: string };
 
 /** Distance from a point to a rectangle (0 inside). */
 const rectDist = (x: number, z: number, r: { x0: number; x1: number; z0: number; z1: number }) =>
@@ -166,13 +167,23 @@ export class Game {
 
   // ======================= outdoor lights =======================
   private lightsOn = false;
-  toggleLights = () => { this.lightsOn = !this.lightsOn; this.applyLights(); this.onToast(this.lightsOn ? 'Đã bật đèn (chiều tối)' : 'Đã tắt đèn'); };
+  /** Indoor lights per room (2-way switches); 'Bật đèn' switches them all with the evening ambience. */
+  private roomOn: Record<string, boolean> = {};
+  toggleRoom = (room: string) => {
+    this.roomOn[room] = !this.roomOn[room]; this.applyLights();
+    this.onToast(`${this.roomOn[room] ? 'Đã bật' : 'Đã tắt'} đèn ${roomTitle(room)}`);
+  };
+  toggleLights = () => { this.lightsOn = !this.lightsOn; for (const r of Object.keys(this.house.lights.rooms)) this.roomOn[r] = this.lightsOn; this.applyLights(); this.onToast(this.lightsOn ? 'Đã bật đèn (chiều tối)' : 'Đã tắt đèn'); };
   /** Lights on = evening: dim sky and sun, bulbs bright, washes and sconce / porch lights on. */
   private applyLights() {
     const L = this.house.lights, on = this.lightsOn;
     L.glows.forEach(g => { g.visible = on; });
-    L.bulbs.forEach(m => m.color.set(on ? 0xfff1c8 : 0x9a9a9a));
+    L.bulbs.forEach(m => m.color.set(on ? 0xfff1c8 : (m.userData.off ?? 0x9a9a9a)));
     L.points.forEach(p => { p.light.intensity = on ? p.on : 0; });
+    for (const [room, R] of Object.entries(L.rooms)) {
+      const r = !!this.roomOn[room];
+      R.bulb.color.set(r ? 0xfff1c8 : (R.bulb.userData.off ?? 0x9a9a9a)); R.glows.forEach(g => { g.visible = r; }); R.points.forEach(p => { p.light.intensity = r ? p.on : 0; });
+    }
     L.hemi.intensity = (on ? 0.2 : 0.8) * Math.PI; L.sun.intensity = (on ? 0.08 : 0.7) * Math.PI;
     const sky = on ? 0x1d2838 : 0xcfe0ea;
     (this.scene.background as THREE.Color).set(sky); (this.scene.fog as THREE.Fog).color.set(sky);
@@ -209,7 +220,7 @@ export class Game {
   designData() {
     const S = this.house.structure;
     return { map: this.map, mirrorZ: this.house.mirrorZ, walls: this.house.walls, structure: { columns: S.columns, footings: S.footings, groundBeam: S.groundBeam, tieBeam: S.tieBeam },
-      openings: this.openings(), objects: this.house.objects, rooms: this.roomSizes(), roofs: this.map.roofs };
+      openings: this.openings(), objects: this.house.objects, fixtures: this.house.lights.fixtures, rooms: this.roomSizes(), roofs: this.map.roofs };
   }
   /** Render one view off-screen and return it as a PNG data URL. Orthographic views take the half extents of the
    *  frame in world metres; `clipY` cuts everything above that height (floor plans); `structure` shows the frame
@@ -276,7 +287,7 @@ export class Game {
   }
 
   /** Number of eave downlights and wall sconces in the current build. */
-  lightCounts() { return { downlights: this.house.lights.downlights, sconces: this.house.lights.sconces }; }
+  lightCounts() { return { downlights: this.house.lights.downlights, sconces: this.house.lights.sconces, indoor: this.house.lights.indoor }; }
 
   private disposeTree(o: THREE.Object3D) {
     o.traverse(c => {
@@ -381,6 +392,7 @@ export class Game {
     else if ('wardrobe' in n) this.setWin(n.wardrobe, !n.wardrobe.open);
     else if ('seat' in n) this.sitDown(n.seat);
     else if ('tv' in n) this.toggleTv();
+    else if ('lamp' in n) this.toggleRoom(n.lamp);
     else this.lieDown(n.bed);
   };
 
@@ -459,6 +471,7 @@ export class Game {
       // the TV unit is deep, so standing at it you are ~1.5 m from the screen; reach up to 2.4 m
       if (d < 2.4 && p.x < c.x) consider(Math.min(1.4, d * 0.6), { tv: true });
     }
+    for (const sw of this.house.switches) { const d = Math.hypot(p.x - sw.x, p.z - sw.z); if (d < 0.9) consider(d * 0.8, { lamp: sw.room }, sw.x, sw.z); }
     const dr = Math.hypot(p.x - this.house.rackPos[0], p.z - this.house.rackPos[1]);
     if (dr < 1.3) consider(dr, { rack: true });
     // beds win when you are right next to them
@@ -474,6 +487,7 @@ export class Game {
     if ('win' in n) return n.win.open ? 'Đóng cửa sổ' : 'Mở cửa sổ';
     if ('wardrobe' in n) return `${n.wardrobe.open ? 'Đóng' : 'Mở'} ${n.wardrobe.name ?? 'tủ'}`;
     if ('tv' in n) return this.tv ? 'Tắt tivi' : 'Bật tivi (YouTube)';
+    if ('lamp' in n) return `${this.roomOn[n.lamp] ? 'Tắt' : 'Bật'} đèn ${roomTitle(n.lamp)} (công tắc 2 chiều)`;
     if ('seat' in n) return n.seat.kind === 'sofa' ? 'Ngồi sofa' : n.seat.kind === 'desk' ? 'Ngồi vào bàn học' : 'Ngồi ghế';
     return 'Nằm lên giường';
   }
@@ -524,6 +538,7 @@ export class Game {
     if (u.door) this.setDoor(u.door as Door, !(u.door as Door).open);
     if (u.win) this.setWin(u.win as Win, !(u.win as Win).open);
     if (u.tv) this.toggleTv();
+    if (u.lamp) this.toggleRoom(u.lamp as string);
   }
 
   private bindInput() {

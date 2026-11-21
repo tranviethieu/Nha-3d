@@ -217,7 +217,7 @@ export function Settings(p: Props) {
               theo khoảng cách dưới đây; đèn hắt tường (2 cột sảnh, 2 bên cửa sổ phòng thờ) và đèn to ở sảnh giữ nguyên.</p>
             <div className={`row ${layout.lights?.spacing ? 'edited' : ''}`}>
               <div className="row-head">
-                <b>Đèn dưới mái</b><span className="area">{game.lightCounts().downlights} bóng · {game.lightCounts().sconces} đèn hắt</span>
+                <b>Đèn dưới mái</b><span className="area">{game.lightCounts().downlights} bóng · {game.lightCounts().sconces} đèn hắt · trong nhà {game.lightCounts().indoor} đèn</span>
                 {layout.lights?.spacing && <button className="icon" title="Về khoảng cách mặc định" onClick={() => { const l = { ...layout }; delete l.lights; p.onChange(l); }}><i className="ti ti-arrow-back-up" /></button>}
               </div>
               <div className="fields">

@@ -2,7 +2,8 @@
 // All helpers take PLAN coordinates in meters (house spans x 0..14, z 0..9);
 // they subtract (7, 4.5) so the house is centered on the world origin.
 import * as THREE from 'three';
-import { LIGHT_SPACING, MAIN_SIDE, MAIN_TRANSOM, PlanMap, emptyLayout, type Layout } from './layout';
+import { ELEC } from './electrical';
+import { LIGHT_SPACING, MAIN_SIDE, MAIN_TRANSOM, PlanMap, ROOM_DIMS, emptyLayout, type Layout } from './layout';
 
 export type Dir = '+x' | '-x' | '+z' | '-z';
 /** Axis-aligned box in WORLD coordinates. */
@@ -55,6 +56,8 @@ export interface House {
   structure: { group: THREE.Group; columns: number; footings: number; groundBeam: number; tieBeam: number };
   /** Wall boxes [x0, z0, x1, z1] in DEFAULT plan coords (map them with mx / mz), for drawn floor plans. */
   walls: number[][];
+  /** Light switches (WORLD x, z) and the room whose lights they toggle (2-way pairs: two per room). */
+  switches: { room: string; x: number; z: number }[];
 }
 export interface HouseLights {
   /** Light washes on the walls (additive planes), shown only when the lights are on. */
@@ -64,8 +67,12 @@ export interface HouseLights {
   /** Real lights (wall sconces, the big porch light); intensity 0 when off. */
   points: { light: THREE.PointLight; on: number }[];
   hemi: THREE.HemisphereLight; sun: THREE.DirectionalLight;
-  /** Number of eave downlights / wall sconces. */
-  downlights: number; sconces: number;
+  /** Number of eave downlights / wall sconces / indoor ceiling lights. */
+  downlights: number; sconces: number; indoor: number;
+  /** Indoor lights per room (ROOM_DIMS key), switched by that room's 2-way switches. */
+  rooms: Record<string, { points: { light: THREE.PointLight; on: number }[]; glows: THREE.Object3D[]; bulb: THREE.MeshBasicMaterial }>;
+  /** Ceiling fixtures in EDITED plan coords, for the electrical plan. */
+  fixtures: { x: number; z: number; kind: 'down' | 'ceiling' | 'pendant'; room: string }[];
 }
 /** An editable piece of furniture. Sizes are in meters: w along x, d along z, h height. */
 export interface ObjInfo {
@@ -652,7 +659,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   // ---- outdoor lights (Bật đèn): eave downlights with a cone of light washed on the wall below, wall sconces
   // (porch columns, both sides of the ancestor-room window) washing light up and down, the big porch light.
   // The washes are additive planes and the downlights have no real light, so dozens of them stay cheap.
-  const lights:HouseLights={glows:[],bulbs:[],points:[],hemi,sun,downlights:0,sconces:0};
+  const lights:HouseLights={glows:[],bulbs:[],points:[],hemi,sun,downlights:0,sconces:0,indoor:0,rooms:{},fixtures:[]};
   {
     const SOF=E1-0.27,spacing=Math.max(0.5,layout.lights?.spacing??LIGHT_SPACING);
     const tex=(draw:(g:CanvasRenderingContext2D)=>void)=>{const c=document.createElement('canvas');c.width=128;c.height=256;draw(c.getContext('2d')!);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;};
@@ -693,6 +700,75 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const tw=map.windows.find(w=>w.spec.id==='w-tho')!.rect;                          // both sides of the ancestor-room window
     sconce(-7,1.75,mz(tw[1])-0.4-4.5,'-x');sconce(-7,1.75,mz(tw[3])+0.4-4.5,'-x');
     const pl=new THREE.PointLight(0xfff0d0,0,6,1.4);pl.position.set(mx(0.05)-7,E3-0.6,mz(2.475)-4.5);scene.add(pl);lights.points.push({light:pl,on:2.2*Math.PI});
+    // ---- gypsum ceilings (trần thạch cao) at +3.2 in every room but the porch, and the indoor lights ----
+    // The ceilings are downward-facing planes: seen from inside the rooms, invisible from above (overview with the
+    // roof off still looks in). Living room and bedrooms have a dropped border band (giật cấp) with a hidden LED
+    // strip washing the raised centre; downlights sit in the band, a ceiling light in the centre. Other rooms get a
+    // grid of downlights; the dining table a row of three pendants. One real light per room lights it at night.
+    const CEIL=3.2,TRAY=0.15,BAND=0.55,ceilMat=new THREE.MeshStandardMaterial({color:0xf8f7f3,roughness:0.92});ceilMat.userData.oneSided=true;
+    const ceil=(x0:number,z0:number,x1:number,z1:number,y:number)=>{if(x1-x0<0.02||z1-z0<0.02)return;
+      const m=new THREE.Mesh(new THREE.PlaneGeometry(x1-x0,z1-z0),ceilMat);m.rotation.x=Math.PI/2;m.position.set((x0+x1)/2-7,y,(z0+z1)/2-4.5);scene.add(m);};
+    // LED wash on the raised centre: a strip bright along the step, fading inwards; faces down only
+    const ledTex=(()=>{const c=document.createElement('canvas');c.width=4;c.height=64;const g=c.getContext('2d')!,gr=g.createLinearGradient(0,64,0,0);
+      gr.addColorStop(0,'rgba(255,214,150,1)');gr.addColorStop(0.35,'rgba(255,205,140,.45)');gr.addColorStop(1,'rgba(255,200,140,0)');g.fillStyle=gr;g.fillRect(0,0,4,64);
+      const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;})();
+    const led=new THREE.MeshBasicMaterial({map:ledTex,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false,fog:false});led.userData.oneSided=true;
+    // fixtures are downward-facing discs: seen from below only (no dots on the overview from above); white when off
+    const indoorBulb=new THREE.MeshBasicMaterial({color:0xf2f2f2});indoorBulb.userData={off:0xf2f2f2,oneSided:true};
+    const ringMat=new THREE.MeshStandardMaterial({color:0xd9d9d9,roughness:0.4,metalness:0.4});ringMat.userData.oneSided=true;
+    const disc=(r:number,mat:THREE.Material,x:number,y:number,z:number)=>{const m=new THREE.Mesh(new THREE.CircleGeometry(r,24),mat);m.rotation.x=Math.PI/2;m.position.set(x-7,y,z-4.5);scene.add(m);};
+    const down=(x:number,z:number,y:number,bm:THREE.Material,room:string)=>{disc(0.075,ringMat,x,y-0.003,z);disc(0.058,bm,x,y-0.006,z);lights.indoor++;lights.fixtures.push({x,z,kind:'down',room});};
+    const DIRV:Record<Dir,[number,number]>={'+x':[1,0],'-x':[-1,0],'+z':[0,1],'-z':[0,-1]};
+    const TRAYS=new Set(['Phòng khách','Phòng ngủ 1','Phòng ngủ 2','Phòng ngủ 3']);
+    // WC concrete ceiling height, and the x (default plan) of each WC's loft hatch = its door centre
+    const WC_CEIL=2.4,WC_SLAB:Record<string,number>={WC1:11.89,WC2:13.22};
+    const slabMat=new THREE.MeshStandardMaterial({color:0xe9e8e4,roughness:0.95}),hatchMat=M(0xd9d4cb),loftBox=M(0xb08d5e);
+    for(const r of ROOM_DIMS){if(r.room==='Sảnh')continue;
+      const R:HouseLights['rooms'][string]={points:[],glows:[],bulb:indoorBulb.clone()};lights.rooms[r.room]=R;
+      const [a0,b0,a1,b1]=map.rect(r.rect),x0=a0-0.06,z0=b0-0.06,x1=a1+0.06,z1=b1+0.06,cx=(a0+a1)/2,cz=(b0+b1)/2,w=a1-a0,d=b1-b0;
+      if(TRAYS.has(r.room)){
+        const ix0=a0+BAND,iz0=b0+BAND,ix1=a1-BAND,iz1=b1-BAND;
+        ceil(x0,z0,x1,iz0,CEIL);ceil(x0,iz1,x1,z1,CEIL);ceil(x0,iz0,ix0,iz1,CEIL);ceil(ix1,iz0,x1,iz1,CEIL);ceil(ix0,iz0,ix1,iz1,CEIL+TRAY);
+        // the step faces (facing the room centre) and the LED wash on them
+        const step=(px:number,pz:number,len:number,n:Dir)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(len,TRAY),ceilMat);
+          m.position.set(px-7,CEIL+TRAY/2,pz-4.5);m.rotation.y={'+z':0,'-z':Math.PI,'+x':Math.PI/2,'-x':-Math.PI/2}[n];scene.add(m);
+          const v=DIRV[n],gl=new THREE.Mesh(new THREE.PlaneGeometry(len,0.6),led);
+          gl.rotation.set(Math.PI/2,0,0);gl.rotateOnWorldAxis(new THREE.Vector3(0,1,0),{'+z':0,'-z':Math.PI,'+x':Math.PI/2,'-x':-Math.PI/2}[n]);
+          gl.position.set(px+v[0]*0.3-7,CEIL+TRAY-0.006,pz+v[1]*0.3-4.5);gl.renderOrder=5;gl.visible=false;scene.add(gl);R.glows.push(gl);};
+        step((ix0+ix1)/2,iz0,ix1-ix0,'+z');step((ix0+ix1)/2,iz1,ix1-ix0,'-z');step(ix0,(iz0+iz1)/2,iz1-iz0,'+x');step(ix1,(iz0+iz1)/2,iz1-iz0,'-x');
+        // centre ceiling light (ốp trần) and downlights along the band, about every 1.3 m
+        disc(0.32,ringMat,cx,CEIL+TRAY-0.004,cz);disc(0.29,R.bulb,cx,CEIL+TRAY-0.008,cz);lights.indoor++;lights.fixtures.push({x:cx,z:cz,kind:'ceiling',room:r.room});
+        const ins=BAND/2,pts:[number,number][]=[];
+        const side=(p0:[number,number],p1:[number,number])=>{const L=Math.hypot(p1[0]-p0[0],p1[1]-p0[1]),n=Math.max(1,Math.round(L/1.3));
+          for(let k=0;k<=n;k++){const p:[number,number]=[p0[0]+(p1[0]-p0[0])*k/n,p0[1]+(p1[1]-p0[1])*k/n];if(!pts.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<0.3))pts.push(p);}};
+        const A:[number,number]=[a0+ins,b0+ins],B:[number,number]=[a1-ins,b0+ins],C:[number,number]=[a1-ins,b1-ins],D:[number,number]=[a0+ins,b1-ins];
+        side(A,B);side(B,C);side(C,D);side(D,A);pts.forEach(([x,z])=>down(x,z,CEIL,R.bulb,r.room));
+      }else if(WC_SLAB[r.room]){
+        // WCs: a 100 mm concrete slab at +2.4 (painted underside), the void above it (to the flat roof) is a storage
+        // loft (gác để đồ) opened from the Lavabo side through a hatch above the WC door
+        const sl=new THREE.Mesh(new THREE.BoxGeometry(x1-x0+0.06,0.1,z1-z0+0.06),slabMat);sl.position.set(cx-7,WC_CEIL+0.05,cz-4.5);scene.add(sl);
+        down(cx,cz,WC_CEIL,R.bulb,r.room);
+        const hx=mx(WC_SLAB[r.room]),fz=mz(6.2)-4.5;   // hatch on the Lavabo face of the WC wall
+        const hd=new THREE.Mesh(new THREE.BoxGeometry(0.66,0.56,0.025),hatchMat);hd.position.set(hx-7,2.84,fz-0.0125);scene.add(hd);
+        const hh=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.02,0.02),M(0x9aa0a6));hh.position.set(hx-7,2.66,fz-0.035);scene.add(hh);
+        // a few storage boxes on the slab (seen with the roof off)
+        [[0.25,0.45,0.42,0.32],[0.75,0.3,0.4,0.3],[0.3,1.2,0.5,0.35],[0.7,1.75,0.38,0.28]].forEach(([u,v,s2,h2])=>{if(u+s2/2>w-0.05)return;
+          const bx=new THREE.Mesh(new THREE.BoxGeometry(s2,h2,s2*0.8),loftBox);bx.position.set(a0+u-7,WC_CEIL+0.1+h2/2,b0+v+0.3-4.5);scene.add(bx);});
+      }else{
+        ceil(x0,z0,x1,z1,CEIL);
+        const nx=Math.max(1,Math.round((w-0.4)/1.6)),nz=Math.max(1,Math.round((d-0.4)/1.6));
+        for(let i=0;i<nx;i++)for(let k=0;k<nz;k++)down(a0+w*(i+0.5)/nx,b0+d*(k+0.5)/nz,CEIL,R.bulb,r.room);
+      }
+      const ch=WC_SLAB[r.room]?WC_CEIL:CEIL;
+      const pt=new THREE.PointLight(0xffe9c8,0,Math.max(w,d)*1.7,1.2);pt.position.set(cx-7,ch-0.35,cz-4.5);scene.add(pt);
+      R.points.push({light:pt,on:(0.45+w*d*0.045)*Math.PI});
+    }
+    // three pendants over the dining table
+    {const shade=M(0x2b2b2b),cord=M(0x222222),tz=mz(2.55);
+      for(const x of [6.35,6.85,7.35]){const X=mx(x)-7,Z=tz-4.5;
+        const cd=new THREE.Mesh(new THREE.CylinderGeometry(0.004,0.004,CEIL-1.8,6),cord);cd.position.set(X,(CEIL+1.8)/2,Z);scene.add(cd);
+        const sh=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.2,24,1,true),shade);sh.material.side=THREE.DoubleSide;sh.position.set(X,1.72,Z);scene.add(sh);
+        const b=new THREE.Mesh(new THREE.SphereGeometry(0.045,12,10),lights.rooms['Bếp + ăn'].bulb);b.position.set(X,1.64,Z);scene.add(b);lights.indoor++;lights.fixtures.push({x:mx(x),z:tz,kind:'pendant',room:'Bếp + ăn'});}}
   }
   // ---- structure (Kết cấu button): a preliminary frame derived from the current walls — pad footings under a
   // column at every wall corner / junction (plus extra ones on long walls, kept out of door and window openings),
@@ -769,6 +845,42 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     for(const l of [{axis:'z',at:-0.625,a0:0.175,a1:4.775},{axis:'x',at:0.175,a0:-0.625,a1:1.1},{axis:'x',at:4.775,a0:-0.625,a1:1.1}] as Line[])
       {structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);structure.tieBeam+=beam(l,PC,PC+0.3,SM.tie);}
   }
+  // ---- electrical fittings (electrical.ts): 2-way switches (click / E toggles the room's lights), sockets, air
+  // conditioners, wall TVs, water heaters, the living-room camera and the main panel, on their wall faces.
+  const switches:House['switches']=[];
+  {
+    const plate=new THREE.MeshStandardMaterial({color:0xf6f6f3,roughness:0.45}),rocker=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.3}),
+      hole=M(0x30302e),acMat=new THREE.MeshStandardMaterial({color:0xf7f7f5,roughness:0.35}),grey=M(0x8c9095),black=new THREE.MeshStandardMaterial({color:0x111214,roughness:0.3,metalness:0.2}),
+      screen=new THREE.MeshStandardMaterial({color:0x1b2633,roughness:0.15,metalness:0.3}),red=new THREE.MeshBasicMaterial({color:0xd23a2a}),green=new THREE.MeshBasicMaterial({color:0x37c46b});
+    const ANG:Record<Dir,number>={'+z':0,'-z':Math.PI,'+x':Math.PI/2,'-x':-Math.PI/2};
+    for(const e of ELEC){
+      const g=new THREE.Group();g.position.set(mx(e.x)-7,e.y,mz(e.z)-4.5);g.rotation.y=ANG[e.n];scene.add(g);
+      // local frame: x along the wall, y up, +z out of the wall into the room
+      const B=(w:number,h:number,d:number,mat:THREE.Material,x=0,y=0,z=0)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z+d/2);g.add(m);return m;};
+      const C=(r:number,len:number,mat:THREE.Material,x:number,y:number,z:number,axis:'x'|'z')=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,20),mat);
+        if(axis==='x')m.rotation.z=Math.PI/2;else m.rotation.x=Math.PI/2;m.position.set(x,y,z);g.add(m);return m;};
+      if(e.kind==='switch2'){
+        const parts=[B(0.086,0.086,0.012,plate),B(0.034,0.06,0.008,rocker,-0.019,0,0.012),B(0.034,0.06,0.008,rocker,0.019,0,0.012)];
+        parts.forEach(m=>{m.userData.lamp=e.room;clickables.push(m);});
+        switches.push({room:e.room,x:mx(e.x)-7,z:mz(e.z)-4.5});
+      }else if(e.kind==='heaterSw'){B(0.086,0.086,0.012,plate);B(0.05,0.06,0.008,rocker,0,0,0.012);B(0.008,0.008,0.004,red,0,0.036,0.012);}
+      else if(e.kind==='socket'){B(0.086,0.086,0.012,plate);for(const dx of [-0.011,0.011])C(0.0045,0.004,hole,dx,0.006,0.013,'z');C(0.004,0.004,hole,0,-0.016,0.013,'z');}
+      else if(e.kind==='data'){B(0.086,0.086,0.012,plate);B(0.016,0.012,0.003,hole,-0.016,0,0.012);C(0.007,0.004,hole,0.018,0,0.013,'z');}
+      else if(e.kind==='ac'){B(0.85,0.28,0.2,acMat);B(0.76,0.025,0.006,grey,0,-0.105,0.2);B(0.04,0.012,0.004,green,0.33,0.05,0.2);}
+      else if(e.kind==='acOut'){ // outdoor unit on two wall brackets, fan grille facing out, insulated pipe into the wall
+        B(0.8,0.55,0.29,acMat,0,0,0.1);C(0.17,0.01,grey,-0.1,0,0.395,'z');C(0.05,0.012,M(0x5a5e63),-0.1,0,0.397,'z');
+        for(const dx of [-0.3,0.3]){B(0.04,0.04,0.42,grey,dx,-0.295,0);B(0.04,0.3,0.04,grey,dx,-0.43,0);}
+        const pipe=M(0xe8e6df);B(0.05,0.05,0.1,pipe,0.33,0.1,0);B(0.05,0.18,0.05,pipe,0.33,0.2,0.05);}
+      else if(e.kind==='tv'){B(0.97,0.57,0.03,black);B(0.94,0.53,0.004,screen,0,0,0.03);}
+      else if(e.kind==='heater'){C(0.19,0.78,acMat,0,0,0.22,'x');B(0.5,0.05,0.04,grey,0,0,0);
+        for(const dx of [-0.12,0.12]){const pp=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.45,8),grey);pp.position.set(dx,-0.4,0.18);g.add(pp);}}
+      else if(e.kind==='camera'){B(0.09,0.09,0.03,acMat);const head=new THREE.Group();head.position.set(0,-0.03,0.09);head.rotation.y=-Math.PI/4;g.add(head);
+        const body=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.14),acMat);body.position.set(0,0,0.04);head.add(body);
+        const lens=new THREE.Mesh(new THREE.CylinderGeometry(0.022,0.022,0.01,16),black);lens.rotation.x=Math.PI/2;lens.position.set(0,0,0.115);head.add(lens);
+        const arm=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.02,0.08),grey);arm.position.set(0,0.0,-0.02);head.add(arm);}
+      else if(e.kind==='panel'){B(0.36,0.46,0.1,M(0xe9e9e6));B(0.3,0.005,0.004,grey,0,0.12,0.1);B(0.06,0.03,0.006,grey,0.12,0,0.1);}
+    }
+  }
   // ---- mirror front-to-back (Cài đặt → Đảo ngược): flip the house group, then every recorded world coordinate.
   // The site (ground, side path, boundary wall, ditch and their labels) is moved out of the flipped group so it stays.
   let mirrorZ:number|null=null;
@@ -782,13 +894,14 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     for(const s of seats){s.z=fz(s.z);s.face=Math.PI-s.face;}
     for(const b of beds){const a=fz(b.z1),c=fz(b.z0);b.z0=a;b.z1=c;if(b.head==='N'||b.head==='S')b.head=b.head==='N'?'S':'N';}
     for(const w of [...windows,...wardrobes])w.z=fz(w.z);
+    for(const sw of switches)sw.z=fz(sw.z);
     for(const d of doors)d.mirror=MZ;
     const mm=new THREE.Matrix4().makeScale(1,1,-1).setPosition(0,0,MZ);
     [...cutPlanes,...thoPlanes,...flatPlanes].forEach(p=>p.applyMatrix4(mm));
     // a negative scale turns faces inside out for raycasting (camera occlusion, clicks): test both sides
-    scene.traverse(o=>{const m=o as THREE.Mesh;if(!m.isMesh)return;(Array.isArray(m.material)?m.material:[m.material]).forEach(mt=>{mt.side=THREE.DoubleSide;});});
+    scene.traverse(o=>{const m=o as THREE.Mesh;if(!m.isMesh)return;(Array.isArray(m.material)?m.material:[m.material]).forEach(mt=>{if(!mt.userData.oneSided)mt.side=THREE.DoubleSide;});});
   }
   scene.updateMatrixWorld(true);
   const rb=new THREE.Box3().setFromObject(rackG),rc=rb.getCenter(new THREE.Vector3());
-  return { solids, floors, tiles, occluders, doors, wcDoors, windows, wardrobes, beds, seats, labels, clickables, roof: roofG, rack: { group: rackG, armL, armR }, rackPos: [rc.x, rc.z], root, objects, mirrorZ, lights, tvScreen, structure, walls: WALLS };
+  return { solids, floors, tiles, occluders, doors, wcDoors, windows, wardrobes, beds, seats, labels, clickables, roof: roofG, rack: { group: rackG, armL, armR }, rackPos: [rc.x, rc.z], root, objects, mirrorZ, lights, tvScreen, structure, walls: WALLS, switches };
 }

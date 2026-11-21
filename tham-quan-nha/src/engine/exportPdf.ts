@@ -4,6 +4,7 @@
 // sheets are packed as JPEG pages into a small hand-written PDF (no PDF library needed).
 import type { Game } from './Game';
 import { COLOR_SPECS, MAIN_SIDE, fmtM, type Dir } from './layout';
+import { CIRCUITS, ELEC, MAIN_BREAKER, type ElecKind } from './electrical';
 
 type V3 = [number, number, number];
 const PW = 2480, PH = 1754;                    // A3 landscape at 150 dpi
@@ -105,7 +106,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   const hz0 = Math.min(zA, zB), hz1 = Math.max(zA, zB);
   const E1 = 3.9, ridge = E1 + F.rise, size = `${fmtM(map.houseD)} × ${fmtM(map.houseW)}`;
   const date = new Date().toLocaleDateString('vi-VN');
-  const TOTAL = 11;
+  const TOTAL = 13;
 
   // ---------------- renders ----------------
   onProgress('Đang dựng hình phối cảnh…');
@@ -180,6 +181,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       ['Diện tích xây dựng (tường bao)', `${builtArea.toFixed(2)} m²`],
       ['Diện tích sử dụng (các phòng)', `≈ ${useArea.toFixed(2)} m²`],
       ['Chiều cao tường (đỉnh tường / mép mái)', `${fmtM(E1)} m`],
+      ['Trần', 'Thạch cao +3.200; WC trần bê tông +2.400, gác để đồ phía trên'],
       ['Cao độ đỉnh mái chính', `${level(ridge)} m`],
       ['Cốt nền / sân', '±0.000 / −0.300'],
       ['Mái chính (dài × rộng, dốc)', `${fmtM(F.L)} × ${fmtM(F.W)} m, ${Math.round(Math.atan(F.t) * 180 / Math.PI)}°`],
@@ -189,20 +191,15 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     heading(g, 'DANH MỤC BẢN VẼ', x, y += 10);
     table(g, x, y + 30, [{ t: 'Ký hiệu', w: 150 }, { t: 'Tên bản vẽ', w: 680 }], [
       ['KT-00', 'Trang bìa & tổng quan'], ['KT-01', 'Mặt bằng bố trí & kích thước'], ['KT-01B', 'Mặt bằng 3D (bỏ mái)'], ['KT-02', 'Mặt đứng chính (Nam) & mặt đứng sau (Bắc)'],
-      ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-07', 'Thống kê nội thất'], ['KT-08', 'Phối cảnh ngoại thất 3D'], ['KT-09', 'Phối cảnh nội thất 3D'],
+      ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-07', 'Thống kê nội thất'], ['KT-08', 'Mặt bằng điện'], ['KT-09', 'Sơ đồ nguyên lý tủ điện & phụ tải'], ['KT-10', 'Phối cảnh ngoại thất 3D'], ['KT-11', 'Phối cảnh nội thất 3D'],
     ], 38, 20);
     pages.push(c);
   }
 
-  // ---------------- KT-01 floor plan ----------------
-  const codes = { doors: new Map<string, string>(), wins: new Map<string, string>() };
-  d.openings.doors.filter(o => !o.hidden).forEach((o, i) => codes.doors.set(o.id, `D${i + 1}`));
-  d.openings.wins.filter(o => !o.hidden).forEach((o, i) => codes.wins.set(o.id, `S${i + 1}`));
-  {
-    const { c, g } = page('MẶT BẰNG BỐ TRÍ & KÍCH THƯỚC', 'KT-01', pages.length + 1, TOTAL, date, size);
-    heading(g, 'MẶT BẰNG TẦNG 1', planBox.X, M + 70, 'Cắt ngang ở cao độ +1.300 · kích thước tính bằng m');
-    g.drawImage(renders.plan, pf.X, pf.Y, pf.W, pf.H);
-    const P = (x: number, z: number) => { const w = W(x, z); return topXY(pf, w[0], w[1]); };
+  // plan base shared by the floor plan and the electrical plan: cut walls, windows (glass lines), doors (swings)
+  const planP = (x: number, z: number) => { const w = W(x, z); return topXY(pf, w[0], w[1]); };
+  const drawBase = (g: CanvasRenderingContext2D, tags: boolean) => {
+    const P = planP;
     const poly = (pts: [number, number][], fill: string) => { g.fillStyle = fill; g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(...p) : g.moveTo(...p))); g.closePath(); g.fill(); };
     const rectE = (x0: number, z0: number, x1: number, z1: number, fill: string) => poly([P(x0, z0), P(x1, z0), P(x1, z1), P(x0, z1)], fill);
     // walls (cut) in dark grey, then openings cleared and drawn
@@ -215,11 +212,12 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       g.strokeStyle = ACC;
       for (const f of [0.35, 0.65]) { const [a, b] = alongX ? [P(x0, z0 + (z1 - z0) * f), P(x1, z0 + (z1 - z0) * f)] : [P(x0 + (x1 - x0) * f, z0), P(x0 + (x1 - x0) * f, z1)]; g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
       g.strokeStyle = INK; g.strokeRect(Math.min(P(x0, z0)[0], P(x1, z1)[0]), Math.min(P(x0, z0)[1], P(x1, z1)[1]), Math.abs(P(x1, z1)[0] - P(x0, z0)[0]), Math.abs(P(x1, z1)[1] - P(x0, z0)[1]));
+      if (tags) {
       // tag outside the wall
       const out = alongX ? (r[1] < 4.5 ? -0.75 : 0.75) : (r[0] < 7 ? -0.75 : 0.75);
       const [tx, ty] = alongX ? P((x0 + x1) / 2, map.mz((r[1] + r[3]) / 2) + out) : P(map.mx((r[0] + r[2]) / 2) + out, (z0 + z1) / 2);
       g.fillStyle = '#fff'; g.strokeStyle = ACC; g.lineWidth = 2; g.beginPath(); g.ellipse(tx, ty, 26, 18, 0, 0, Math.PI * 2); g.fill(); g.stroke();
-      g.fillStyle = ACC; g.font = `700 18px ${FONT}`; g.textAlign = 'center'; g.fillText(codes.wins.get(w.spec.id)!, tx, ty + 6); g.textAlign = 'left';
+      g.fillStyle = ACC; g.font = `700 18px ${FONT}`; g.textAlign = 'center'; g.fillText(codes.wins.get(w.spec.id)!, tx, ty + 6); g.textAlign = 'left'; }
     }
     for (const dd of map.doors) {
       if (dd.hidden) continue; const sp = dd.spec, [a0, a1] = dd.span, along = sp.axis;
@@ -236,10 +234,23 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
         g.setLineDash([8, 6]); g.beginPath(); for (let i = 0; i <= 16; i++) { const p = pt(Math.PI / 2 * i / 16); i ? g.lineTo(...p) : g.moveTo(...p); } g.stroke(); g.setLineDash([]);
       }
       if (sp.kind === 'main') { g.strokeStyle = ACC; for (const z of [a0 + MAIN_SIDE * 0.5, a1 - MAIN_SIDE * 0.5]) { const p = P(map.mx(sp.at), map.mz(z - MAIN_SIDE / 2)), q = P(map.mx(sp.at), map.mz(z + MAIN_SIDE / 2)); g.beginPath(); g.moveTo(...p); g.lineTo(...q); g.stroke(); } }
+      if (tags) {
       const mid = (a0 + a1) / 2, [tx, ty] = along === 'x' ? P(map.mx(mid), map.mz(sp.at) + (sp.od === '+z' ? -0.45 : 0.45)) : P(map.mx(sp.at) + (sp.od === '-x' ? 0.55 : -0.55), map.mz(mid));
       g.fillStyle = '#fff'; g.strokeStyle = '#b4532a'; g.lineWidth = 2; g.fillRect(tx - 24, ty - 16, 48, 30); g.strokeRect(tx - 24, ty - 16, 48, 30);
-      g.fillStyle = '#b4532a'; g.font = `700 18px ${FONT}`; g.textAlign = 'center'; g.fillText(codes.doors.get(sp.id)!, tx, ty + 6); g.textAlign = 'left';
+      g.fillStyle = '#b4532a'; g.font = `700 18px ${FONT}`; g.textAlign = 'center'; g.fillText(codes.doors.get(sp.id)!, tx, ty + 6); g.textAlign = 'left'; }
     }
+  };
+
+  // ---------------- KT-01 floor plan ----------------
+  const codes = { doors: new Map<string, string>(), wins: new Map<string, string>() };
+  d.openings.doors.filter(o => !o.hidden).forEach((o, i) => codes.doors.set(o.id, `D${i + 1}`));
+  d.openings.wins.filter(o => !o.hidden).forEach((o, i) => codes.wins.set(o.id, `S${i + 1}`));
+  {
+    const { c, g } = page('MẶT BẰNG BỐ TRÍ & KÍCH THƯỚC', 'KT-01', pages.length + 1, TOTAL, date, size);
+    heading(g, 'MẶT BẰNG TẦNG 1', planBox.X, M + 70, 'Cắt ngang ở cao độ +1.300 · kích thước tính bằng m');
+    g.drawImage(renders.plan, pf.X, pf.Y, pf.W, pf.H);
+    const P = planP;
+    drawBase(g, true);
     // room labels: name, size, area
     for (const r of d.rooms) {
       const [x0, z0, x1, z1] = map.rect(r.base.rect), [px, py] = P((x0 + x1) / 2, (z0 + z1) / 2);
@@ -401,8 +412,123 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     pages.push(c);
   }
 
-  // ---------------- KT-08 / KT-09 3D views (3 x 2 grid) ----------------
-  for (const [code, title, prefix] of [['KT-08', 'PHỐI CẢNH NGOẠI THẤT 3D', 'x', 9], ['KT-09', 'PHỐI CẢNH NỘI THẤT 3D', 'i', 10]] as const) {
+  // ---------------- KT-08 electrical plan ----------------
+  const SYM_COL: Record<ElecKind, string> = { switch2: '#c0392b', heaterSw: '#c0392b', socket: '#2f6fb3', data: '#7d3c98', ac: '#16a085', tv: '#1d2430', heater: '#d35400', camera: '#7d3c98', panel: '#1d2430', acOut: '#16a085' };
+  const symbol = (g: CanvasRenderingContext2D, kind: ElecKind | 'down' | 'ceiling' | 'pendant', x: number, y: number, ang = 0, s = 1) => {
+    g.save(); g.translate(x, y); g.rotate(ang); g.scale(s, s); g.lineWidth = 2.2;
+    const col = kind in SYM_COL ? SYM_COL[kind as ElecKind] : '#b7950b';
+    g.strokeStyle = col; g.fillStyle = '#fff';
+    if (kind === 'down') { g.beginPath(); g.arc(0, 0, 9, 0, Math.PI * 2); g.fill(); g.stroke(); g.beginPath(); g.arc(0, 0, 3, 0, Math.PI * 2); g.fillStyle = col; g.fill(); }
+    else if (kind === 'ceiling') { g.beginPath(); g.arc(0, 0, 17, 0, Math.PI * 2); g.fill(); g.stroke(); g.beginPath(); g.moveTo(-12, -12); g.lineTo(12, 12); g.moveTo(12, -12); g.lineTo(-12, 12); g.stroke(); }
+    else if (kind === 'pendant') { g.beginPath(); g.arc(0, 0, 12, 0, Math.PI * 2); g.fill(); g.stroke(); g.fillStyle = col; g.beginPath(); g.arc(0, 0, 6, 0, Math.PI * 2); g.fill(); }
+    else if (kind === 'switch2' || kind === 'heaterSw') { g.fillStyle = col; g.beginPath(); g.arc(0, 0, 8, 0, Math.PI * 2); g.fill(); g.beginPath(); g.moveTo(0, 0); g.lineTo(14, -16); g.lineTo(20, -11); g.moveTo(0, 0); g.lineTo(-14, -16); g.lineTo(-20, -11); g.stroke();
+      if (kind === 'heaterSw') { g.font = `700 14px ${FONT}`; g.fillText('NL', 12, 16); } }
+    else if (kind === 'socket') { g.fillStyle = col; g.beginPath(); g.arc(0, 0, 11, Math.PI, 0); g.closePath(); g.fill(); g.beginPath(); g.moveTo(-7, -11); g.lineTo(-7, -19); g.moveTo(7, -11); g.lineTo(7, -19); g.stroke(); }
+    else if (kind === 'data') { g.fillStyle = col; g.beginPath(); g.moveTo(-10, 0); g.lineTo(10, 0); g.lineTo(0, -15); g.closePath(); g.fill(); }
+    else if (kind === 'ac') { g.fillRect(-34, -16, 68, 16); g.strokeRect(-34, -16, 68, 16); g.fillStyle = col; g.font = `700 13px ${FONT}`; g.textAlign = 'center'; g.fillText('ĐH', 0, -3); }
+    else if (kind === 'acOut') { g.fillRect(-26, -26, 52, 26); g.strokeRect(-26, -26, 52, 26); g.beginPath(); g.arc(-6, -13, 9, 0, Math.PI * 2); g.stroke(); g.fillStyle = col; g.font = `700 11px ${FONT}`; g.textAlign = 'center'; g.fillText('DN', 14, -9); }
+    else if (kind === 'tv') { g.fillStyle = col; g.fillRect(-30, -8, 60, 8); }
+    else if (kind === 'heater') { g.beginPath(); g.roundRect(-30, -22, 60, 22, 10); g.fill(); g.stroke(); g.fillStyle = col; g.font = `700 13px ${FONT}`; g.textAlign = 'center'; g.fillText('NL', 0, -6); }
+    else if (kind === 'camera') { g.fillStyle = col; g.fillRect(-12, -18, 24, 14); g.beginPath(); g.moveTo(12, -11); g.lineTo(22, -18); g.lineTo(22, -4); g.closePath(); g.fill(); }
+    else if (kind === 'panel') { g.fillStyle = col; g.fillRect(-20, -14, 40, 14); g.fillStyle = '#fff'; g.font = `700 11px ${FONT}`; g.textAlign = 'center'; g.fillText('TĐ', 0, -3); }
+    g.restore();
+  };
+  {
+    const { c, g } = page('MẶT BẰNG ĐIỆN', 'KT-08', pages.length + 1, TOTAL, date, size);
+    heading(g, 'MẶT BẰNG ĐIỆN — ĐÈN, CÔNG TẮC 2 CHIỀU, Ổ CẮM, THIẾT BỊ', planBox.X, M + 70, 'Mỗi phòng 2 công tắc 2 chiều cùng điều khiển đèn phòng · số nhỏ cạnh ký hiệu: độ cao lắp (m) / mạch');
+    g.globalAlpha = 0.25; g.drawImage(renders.plan, pf.X, pf.Y, pf.W, pf.H); g.globalAlpha = 1;
+    drawBase(g, false);
+    const P = planP;
+    // fixtures
+    for (const f of d.fixtures) { const [x, y] = P(f.x, f.z); symbol(g, f.kind, x, y); }
+    // 2-way wiring: traveller between the two switches, and from a switch to the room's main light (dashed)
+    const roomLight = (room: string) => d.fixtures.find(f => f.room === room && f.kind === 'ceiling') ?? d.fixtures.find(f => f.room === room);
+    const at = (e: typeof ELEC[number]) => { const v = DIRV[e.n], X = map.mx(e.x) + v[0] * 0.16, Z = map.mz(e.z) + v[1] * 0.16; return P(X, Z); };
+    g.setLineDash([10, 7]); g.lineWidth = 1.6;
+    for (const room of new Set(ELEC.filter(e => e.kind === 'switch2').map(e => e.room))) {
+      const sw = ELEC.filter(e => e.kind === 'switch2' && e.room === room), lt = roomLight(room);
+      if (sw.length === 2) { const a = at(sw[0]), b = at(sw[1]); g.strokeStyle = 'rgba(192,57,43,.75)'; g.beginPath(); g.moveTo(...a); g.quadraticCurveTo((a[0] + b[0]) / 2 + 30, (a[1] + b[1]) / 2 - 30, ...b); g.stroke(); }
+      if (lt) { const a = at(sw[0]), b = P(lt.x, lt.z); g.strokeStyle = 'rgba(183,149,11,.8)'; g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
+    }
+    // refrigerant pipe from each indoor unit to its outdoor unit (same circuit)
+    g.strokeStyle = 'rgba(22,160,133,.85)'; g.lineWidth = 2.4; g.setLineDash([4, 5]);
+    for (const o of ELEC.filter(e => e.kind === 'acOut')) { const i = ELEC.find(e => e.kind === 'ac' && e.circuit === o.circuit); if (!i) continue; const a = at(i), b = at(o); g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
+    g.setLineDash([]);
+    // fittings, rotated so they sit against their wall
+    for (const e of ELEC) {
+      const v = DIRV[e.n], [x0, y0] = P(map.mx(e.x), map.mz(e.z)), [x1, y1] = P(map.mx(e.x) + v[0], map.mz(e.z) + v[1]);
+      const ang = Math.atan2(x1 - x0, -(y1 - y0)); // symbol's "up" (-y) points into the room
+      const [sx, sy] = at(e); symbol(g, e.kind, sx, sy, ang, e.kind === 'ac' || e.kind === 'acOut' || e.kind === 'tv' || e.kind === 'heater' ? 1 : 0.95);
+      if (e.kind === 'socket' || e.kind === 'switch2' || e.kind === 'data') {
+        const tx = sx + (x1 - x0) * 0.32, ty = sy + (y1 - y0) * 0.32;
+        g.fillStyle = SOFT; g.font = `600 13px ${FONT}`; g.textAlign = 'center'; g.fillText(`${e.y.toFixed(2)}${e.circuit ? ' · ' + e.circuit : ''}`, tx, ty + 4); g.textAlign = 'left';
+      }
+    }
+    // legend
+    const lx = planBox.X + planBox.W + 70; let ly = M + 150;
+    northArrow(g, lx + 40, ly + 40); ly += 120; heading(g, 'KÝ HIỆU', lx, ly); ly += 20;
+    const count = (k: ElecKind) => ELEC.filter(e => e.kind === k).length;
+    const rows: [ElecKind | 'down' | 'ceiling' | 'pendant', string, number][] = [
+      ['ceiling', 'Đèn ốp trần (ô giật cấp)', d.fixtures.filter(f => f.kind === 'ceiling').length], ['down', 'Đèn âm trần LED', d.fixtures.filter(f => f.kind === 'down').length],
+      ['pendant', 'Đèn thả bàn ăn', d.fixtures.filter(f => f.kind === 'pendant').length], ['switch2', 'Công tắc 2 chiều (cao 1.25 / đầu giường 0.9)', count('switch2')],
+      ['socket', 'Ổ cắm đôi 3 chấu (cao 0.4 trừ ghi chú)', count('socket')], ['data', 'Ổ mạng LAN + truyền hình', count('data')], ['ac', 'Điều hoà treo tường (cao 2.85)', count('ac')], ['acOut', 'Cục nóng ngoài tường (giá đỡ, cao 2.3)', count('acOut')],
+      ['tv', 'Tivi treo tường', count('tv')], ['heater', 'Bình nóng lạnh 30 L (cao 2.05)', count('heater')], ['heaterSw', 'Công tắc 2 cực nóng lạnh', count('heaterSw')],
+      ['camera', 'Camera an ninh', count('camera')], ['panel', 'Tủ điện tổng + aptomat tổng 63A', count('panel')],
+    ];
+    for (const [k, t, n] of rows) { ly += 44; symbol(g, k, lx + 26, ly + (k === 'socket' || k === 'switch2' || k === 'data' || k === 'ac' || k === 'acOut' || k === 'tv' || k === 'heater' || k === 'camera' || k === 'panel' ? 6 : -6)); g.fillStyle = INK; g.font = `400 19px ${FONT}`; g.fillText(t, lx + 70, ly, 460); g.font = `700 19px ${FONT}`; g.textAlign = 'right'; g.fillText(String(n), lx + 590, ly); g.textAlign = 'left'; }
+    ly += 50; g.setLineDash([10, 7]); g.lineWidth = 2;
+    g.strokeStyle = 'rgba(192,57,43,.75)'; g.beginPath(); g.moveTo(lx, ly); g.lineTo(lx + 52, ly); g.stroke(); g.fillStyle = INK; g.font = `400 19px ${FONT}`; g.fillText('Dây đảo giữa 2 công tắc 2 chiều', lx + 70, ly + 6);
+    ly += 36; g.strokeStyle = 'rgba(183,149,11,.8)'; g.beginPath(); g.moveTo(lx, ly); g.lineTo(lx + 52, ly); g.stroke(); g.fillText('Dây ra đèn của phòng', lx + 70, ly + 6); g.setLineDash([]);
+    ly += 50; g.fillStyle = SOFT; g.font = `400 18px ${FONT}`;
+    ['Dây đi ngầm tường trong ống luồn, đèn đi trên trần thạch cao.', 'Ổ cắm khu ướt (WC, giặt, bếp) qua RCBO 30 mA.', 'Cục nóng: tường hậu (PN1, PN2), hồi tây (PN3); ống gas đi trên trần.', 'Tiếp địa cọc đồng, R ≤ 4 Ω, nối dây PE tới mọi ổ cắm.']
+      .forEach(t => { g.fillText('• ' + t, lx, ly, 590); ly += 28; });
+    pages.push(c);
+  }
+
+  // ---------------- KT-09 single-line diagram + loads ----------------
+  {
+    const { c, g, top: t } = page('SƠ ĐỒ NGUYÊN LÝ TỦ ĐIỆN & PHỤ TẢI', 'KT-09', pages.length + 1, TOTAL, date, size);
+    heading(g, 'SƠ ĐỒ NGUYÊN LÝ TỦ ĐIỆN TỔNG', M + 60, t + 40, '1 pha 220 V · tủ đặt trong phòng khách cạnh cửa chính, cao 1.6 m');
+    const x0 = M + 90, rowH = 50, yTop = t + 120;
+    // supply -> meter -> main breaker -> busbar
+    g.strokeStyle = INK; g.fillStyle = INK; g.lineWidth = 3;
+    const brk = (x: number, y: number) => { g.strokeRect(x - 12, y - 12, 24, 24); g.beginPath(); g.moveTo(x - 12, y + 12); g.lineTo(x + 12, y - 12); g.stroke(); };
+    g.font = `700 20px ${FONT}`; g.fillText('Lưới điện 1 pha', x0 - 30, yTop - 10);
+    g.beginPath(); g.moveTo(x0, yTop); g.lineTo(x0, yTop + 50); g.stroke();
+    g.strokeRect(x0 - 26, yTop + 50, 52, 40); g.font = `700 16px ${FONT}`; g.textAlign = 'center'; g.fillText('kWh', x0, yTop + 76); g.textAlign = 'left';
+    g.font = `400 18px ${FONT}`; g.fillText('Công tơ điện lực', x0 + 40, yTop + 76);
+    g.beginPath(); g.moveTo(x0, yTop + 90); g.lineTo(x0, yTop + 140); g.stroke(); brk(x0, yTop + 152);
+    g.font = `700 19px ${FONT}`; g.fillText(`${MAIN_BREAKER.name}: ${MAIN_BREAKER.breaker}`, x0 + 40, yTop + 150);
+    g.font = `400 17px ${FONT}`; g.fillStyle = SOFT; g.fillText(`${MAIN_BREAKER.cable} · ${MAIN_BREAKER.note}`, x0 + 40, yTop + 174); g.fillStyle = INK;
+    const busY0 = yTop + 200, busY1 = busY0 + (CIRCUITS.length - 1) * rowH + 30;
+    g.beginPath(); g.moveTo(x0, yTop + 164); g.lineTo(x0, busY0); g.stroke();
+    g.lineWidth = 7; g.beginPath(); g.moveTo(x0, busY0); g.lineTo(x0, busY1); g.stroke(); g.lineWidth = 2.5;
+    g.font = `400 16px ${FONT}`; g.fillStyle = SOFT; g.fillText('Thanh cái', x0 - 80, busY0 + 14); g.fillStyle = INK;
+    CIRCUITS.forEach((cc, i) => {
+      const y = busY0 + 20 + i * rowH;
+      g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + 70, y); g.stroke(); brk(x0 + 82, y); g.beginPath(); g.moveTo(x0 + 94, y); g.lineTo(x0 + 520, y); g.stroke();
+      g.beginPath(); g.moveTo(x0 + 520, y - 8); g.lineTo(x0 + 536, y); g.lineTo(x0 + 520, y + 8); g.fill();
+      g.font = `700 18px ${FONT}`; g.fillText(cc.id, x0 + 110, y - 8); g.font = `400 16px ${FONT}`; g.fillText(cc.breaker, x0 + 160, y - 8);
+      g.fillStyle = SOFT; g.fillText(cc.cable, x0 + 380, y - 8); g.fillStyle = INK;
+      g.font = `400 18px ${FONT}`; g.fillText(cc.name, x0 + 552, y + 6, 560);
+    });
+    // load table + device counts
+    const tx = M + 1300; let ty = t + 40;
+    heading(g, 'BẢNG PHỤ TẢI', tx, ty);
+    const total = CIRCUITS.reduce((s2, cc) => s2 + cc.kw, 0), demand = total * 0.5, amps = demand * 1000 / (220 * 0.9);
+    ty = table(g, tx, ty + 26, [{ t: 'Mạch', w: 90 }, { t: 'Phụ tải', w: 560 }, { t: 'kW', w: 110, right: true }],
+      [...CIRCUITS.map(cc => [cc.id, cc.name, cc.kw.toFixed(1)]), ['Σ', 'Tổng công suất đặt', total.toFixed(1)], ['', 'Công suất tính toán (hệ số đồng thời 0.5)', demand.toFixed(1)], ['', 'Dòng điện tính toán (cos φ 0.9) — aptomat tổng 63A', `${amps.toFixed(0)} A`]], 34, 18) + 30;
+    g.fillStyle = SOFT; g.font = `400 17px ${FONT}`; g.fillText('Phòng khách, bếp không lắp điều hoà. Nếu chạy cùng lúc 3 điều hoà, 2 nóng lạnh và bếp từ thường xuyên: xin công tơ 63A trở lên.', tx, ty, 760); ty += 60;
+    heading(g, 'SỐ LƯỢNG THIẾT BỊ THEO PHÒNG', tx, ty);
+    const kinds: ElecKind[] = ['switch2', 'socket', 'data', 'ac', 'tv', 'heater'];
+    const roomsE = [...new Set(ELEC.map(e => e.room))];
+    table(g, tx, ty + 26, [{ t: 'Phòng', w: 190 }, ...kinds.map(k => ({ t: ({ switch2: 'CT 2C', socket: 'Ổ cắm', data: 'Mạng', ac: 'ĐH', tv: 'TV', heater: 'NL' } as Record<string, string>)[k], w: 95, right: true }))],
+      roomsE.map(r => [d.rooms.find(x => x.room === r)?.title ?? r, ...kinds.map(k => String(ELEC.filter(e => e.room === r && e.kind === k).length || '—'))]), 32, 17);
+    pages.push(c);
+  }
+
+  // ---------------- KT-10 / KT-11 3D views (3 x 2 grid) ----------------
+  for (const [code, title, prefix] of [['KT-10', 'PHỐI CẢNH NGOẠI THẤT 3D', 'x', 9], ['KT-11', 'PHỐI CẢNH NỘI THẤT 3D', 'i', 10]] as const) {
     const { c, g, top: t, bottom } = page(title, code, pages.length + 1, TOTAL, date, size);
     heading(g, title, M + 60, t + 40);
     const list = views3d.filter(v => v.k.startsWith(prefix)), gap = 34, x0 = M + 60, y0 = t + 80;
