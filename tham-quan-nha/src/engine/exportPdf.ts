@@ -105,7 +105,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   const hz0 = Math.min(zA, zB), hz1 = Math.max(zA, zB);
   const E1 = 3.9, ridge = E1 + F.rise, size = `${fmtM(map.houseD)} × ${fmtM(map.houseW)}`;
   const date = new Date().toLocaleDateString('vi-VN');
-  const TOTAL = 8;
+  const TOTAL = 10;
 
   // ---------------- renders ----------------
   onProgress('Đang dựng hình phối cảnh…');
@@ -138,6 +138,26 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   const EW = 2200, EH = Math.round(EW * ehh / Math.max(ehwX, ehwZ));
   for (const e of elev) await snap('e' + e.k, { pos: e.pos, target: e.target, half: [Math.max(ehwX, ehwZ), Math.max(ehwX, ehwZ) * EH / EW] }, { w: EW, h: EH, roof: true });
 
+  // 3D views for KT-08 / KT-09 (plan coords -> world, so they follow room edits and the mirror)
+  onProgress('Đang dựng các ảnh 3D…');
+  const V = (x: number, y: number, z: number): V3 => { const w = W(map.mx(x), map.mz(z)); return [w[0], y, w[1]]; };
+  const views3d: { k: string; cap: string; pos: V3; target: V3; fov: number; roof: boolean }[] = [
+    { k: 'x1', cap: 'Phối cảnh góc Đông Nam (sảnh, mặt tiền)', pos: V(-9, 6.5, -9), target: V(5.5, 1.2, 3.5), fov: 40, roof: true },
+    { k: 'x2', cap: 'Phối cảnh góc Tây Nam', pos: V(23, 7, -8), target: V(8, 1.2, 4), fov: 40, roof: true },
+    { k: 'x3', cap: 'Phối cảnh góc Tây Bắc (mái bằng, téc nước)', pos: V(23, 10, 18), target: V(9, 2, 5.5), fov: 40, roof: true },
+    { k: 'x4', cap: 'Phối cảnh góc Đông Bắc (phòng thờ)', pos: V(-9, 7.5, 18), target: V(4, 1.2, 5.5), fov: 40, roof: true },
+    { k: 'x5', cap: 'Sảnh và cửa chính', pos: V(-5.2, 1.7, 2.5), target: V(1.1, 1.9, 2.5), fov: 50, roof: true },
+    { k: 'x6', cap: 'Bố trí nội thất toàn nhà (bỏ mái)', pos: V(-5, 15, -7), target: V(7, 0, 4.6), fov: 42, roof: false },
+    { k: 'i1', cap: 'Phòng khách — sofa gỗ óc chó, vách tivi, tủ rượu', pos: V(1.6, 1.6, 4.4), target: V(5.6, 1.1, 1.4), fov: 62, roof: true },
+    { k: 'i2', cap: 'Bếp + phòng ăn', pos: V(6.4, 1.7, 4.5), target: V(9.2, 1.0, 1.0), fov: 62, roof: true },
+    { k: 'i3', cap: 'Phòng ngủ 1', pos: V(6.0, 1.7, 5.4), target: V(3.4, 0.8, 7.9), fov: 64, roof: true },
+    { k: 'i4', cap: 'Phòng ngủ 2', pos: V(10.4, 1.7, 5.4), target: V(7.4, 0.8, 7.7), fov: 64, roof: true },
+    { k: 'i5', cap: 'Phòng ngủ 3', pos: V(10.4, 1.7, 3.6), target: V(12.8, 0.8, 0.7), fov: 64, roof: true },
+    { k: 'i6', cap: 'Phòng thờ', pos: V(0.35, 1.85, 8.65), target: V(2.3, 0.9, 6.5), fov: 78, roof: true },
+  ];
+  const GW = 1110, GH = 940;
+  for (const v of views3d) await snap(v.k, { pos: v.pos, target: v.target, fov: v.fov }, { w: GW, h: GH, roof: v.roof });
+
   onProgress('Đang dàn trang…');
   const pages: HTMLCanvasElement[] = [];
 
@@ -166,7 +186,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     heading(g, 'DANH MỤC BẢN VẼ', x, y += 10);
     table(g, x, y + 30, [{ t: 'Ký hiệu', w: 150 }, { t: 'Tên bản vẽ', w: 680 }], [
       ['KT-00', 'Trang bìa & tổng quan'], ['KT-01', 'Mặt bằng bố trí & kích thước'], ['KT-02', 'Mặt đứng chính (Nam) & mặt đứng sau (Bắc)'],
-      ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-07', 'Thống kê nội thất'],
+      ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-07', 'Thống kê nội thất'], ['KT-08', 'Phối cảnh ngoại thất 3D'], ['KT-09', 'Phối cảnh nội thất 3D'],
     ], 38, 20);
     pages.push(c);
   }
@@ -366,6 +386,23 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     const half = Math.ceil(rows.length / 2), cols = [{ t: 'TT', w: 70 }, { t: 'Tên', w: 470 }, { t: 'Phòng', w: 250 }, { t: 'Kích thước (mm)', w: 330 }];
     table(g, M + 60, t + 110, cols, rows.slice(0, half), 38, 19);
     table(g, M + 60 + 1150, t + 110, cols, rows.slice(half), 38, 19);
+    pages.push(c);
+  }
+
+  // ---------------- KT-08 / KT-09 3D views (3 x 2 grid) ----------------
+  for (const [code, title, prefix, n] of [['KT-08', 'PHỐI CẢNH NGOẠI THẤT 3D', 'x', 9], ['KT-09', 'PHỐI CẢNH NỘI THẤT 3D', 'i', 10]] as const) {
+    const { c, g, top: t, bottom } = page(title, code, n, TOTAL, date, size);
+    heading(g, title, M + 60, t + 40);
+    const list = views3d.filter(v => v.k.startsWith(prefix)), gap = 34, x0 = M + 60, y0 = t + 80;
+    const cw = (PW - 2 * M - 120 - 2 * gap) / 3, ch = (bottom - y0 - gap) / 2 - 50;
+    list.forEach((v, i) => {
+      const col = i % 3, row = Math.floor(i / 3), x = x0 + col * (cw + gap), y = y0 + row * (ch + 50 + gap);
+      const img = renders[v.k], s2 = Math.max(cw / img.width, ch / img.height), sw = cw / s2, sh = ch / s2;
+      g.drawImage(img, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, x, y, cw, ch);   // cover-crop into the cell
+      g.strokeStyle = LINE; g.lineWidth = 1.5; g.strokeRect(x, y, cw, ch);
+      g.fillStyle = ACC; g.font = `700 24px ${FONT}`; g.fillText(`${i + 1}`, x, y + ch + 36);
+      g.fillStyle = INK; g.font = `600 24px ${FONT}`; g.fillText(v.cap, x + 30, y + ch + 36, cw - 30);
+    });
     pages.push(c);
   }
 

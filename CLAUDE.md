@@ -129,7 +129,7 @@ There is no build, no package manager and no tests. To run it, open the file in 
   - **Tank:** a horizontal 1500 L stainless tank (Φ1140 × L1750, 1.365 m on its stand) centred over the WCs.
   - **Columns:** the structure grid adds columns at (10.77, 6.25) and (13.9, 6.25) so the slab sits on a framed bay.
 - **PDF export (Xuất PDF button):** `src/engine/exportPdf.ts`, loaded on demand.
-  - **Sheets:** 8 A3 sheets (KT-00 to KT-07): cover, floor plan, elevations S/N and E/W, roof plan, structure, door/window schedule, furniture.
+  - **Sheets:** 10 A3 sheets (KT-00 to KT-09): cover, floor plan, elevations S/N and E/W, roof plan, structure, door/window schedule, furniture, then 6 exterior and 6 interior 3D views (`views3d`, plan coords mapped through the edits and the mirror, cover-cropped into a 3 × 2 grid).
   - **Renders:** `Game.snapshot()` renders off-screen views. Orthographic top views use north up and east right; elevations put the camera just outside each wall, inside the boundary wall. `clipY` cuts the floor plan. Labels, dims, the character and fog are hidden while rendering, and the state is restored after.
   - **Data:** `Game.designData()` supplies map, walls, openings, objects, rooms, roofs and structure counts.
   - **Overlays:** drawn on a canvas, so Vietnamese renders with system fonts: cut walls, window glass lines, door swings, S/D tags, room labels, dimension chains, level marks.
