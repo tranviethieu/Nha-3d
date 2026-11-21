@@ -74,7 +74,7 @@ export const DOOR_SPECS: DoorSpec[] = [
 export interface WinSpec { id: string; label: string; room: string; rect: [number, number, number, number, number, number]; style: 'triple' | 'quad' | 'awning' | 'double' }
 export const WIN_SPECS: WinSpec[] = [
   { id: 'w-khach', label: 'Cửa sổ phòng khách (4 cánh, 2,44 m)', room: 'Phòng khách', rect: [2.38, -0.02, 4.82, 0.22, 0.9, 2.7], style: 'quad' },
-  { id: 'w-bep2', label: 'Cửa sổ bếp 0,8 m (thay cửa phụ)', room: 'Bếp + ăn', rect: [6.04, -0.02, 6.84, 0.22, 0.9, 2.7], style: 'double' },
+  { id: 'w-bep2', label: 'Cửa sổ bếp 0,8 m (thay cửa phụ)', room: 'Bếp + ăn', rect: [6.62, -0.02, 7.42, 0.22, 0.9, 2.7], style: 'double' },
   { id: 'w-bep', label: 'Cửa sổ bếp (hất lên)', room: 'Bếp + ăn', rect: [7.97, -0.02, 9.17, 0.22, 0.9, 1.7], style: 'awning' },
   { id: 'w-pn3t', label: 'Cửa sổ mặt tiền', room: 'Phòng ngủ 3', rect: [10.15, -0.02, 11.3, 0.22, 0.9, 2.7], style: 'double' },
   { id: 'w-tho', label: 'Cửa sổ phòng thờ (3 cánh)', room: 'Phòng thờ', rect: [-0.02, 6.12, 0.22, 7.72, 0.9, 2.7], style: 'triple' },

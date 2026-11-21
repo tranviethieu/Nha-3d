@@ -219,7 +219,7 @@ export class Game {
   /** Everything the PDF needs besides pictures: the plan map, mirror, structure counts, openings, furniture. */
   designData() {
     const S = this.house.structure;
-    return { map: this.map, mirrorZ: this.house.mirrorZ, walls: this.house.walls, structure: { columns: S.columns, footings: S.footings, groundBeam: S.groundBeam, tieBeam: S.tieBeam },
+    return { map: this.map, mirrorZ: this.house.mirrorZ, walls: this.house.walls, structure: { columns: S.columns, footings: S.footings, groundBeam: S.groundBeam, tieBeam: S.tieBeam, cols: S.cols, beams: S.beams },
       openings: this.openings(), objects: this.house.objects, fixtures: this.house.lights.fixtures, rooms: this.roomSizes(), roofs: this.map.roofs };
   }
   /** Render one view off-screen and return it as a PNG data URL. Orthographic views take the half extents of the

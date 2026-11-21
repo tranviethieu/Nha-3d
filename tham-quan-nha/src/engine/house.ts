@@ -53,7 +53,9 @@ export interface House {
   /** Furniture / fixtures that can be resized and moved in the settings panel. */
   objects: ObjInfo[];
   /** Preliminary structural frame (footings, ground beams, columns, tie beams), hidden until shown; beam lengths in m. */
-  structure: { group: THREE.Group; columns: number; footings: number; groundBeam: number; tieBeam: number };
+  structure: { group: THREE.Group; columns: number; footings: number; groundBeam: number; tieBeam: number;
+    /** Column centres and tie-beam centre lines in EDITED plan coords (for the labelled C / D plan in the PDF). */
+    cols: { x: number; z: number; porch: boolean }[]; beams: { x0: number; z0: number; x1: number; z1: number; porch: boolean }[] };
   /** Wall boxes [x0, z0, x1, z1] in DEFAULT plan coords (map them with mx / mz), for drawn floor plans. */
   walls: number[][];
   /** Light switches (WORLD x, z) and the room whose lights they toggle (2-way pairs: two per room). */
@@ -221,7 +223,8 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   const wallMat=M(map.color('wall'));
   // WALLS (keep WALL_RIGID_X / Z in layout.ts in sync): continuous walls; doors and windows are cut out as holes
   const WALLS=[[1.0,0,14,0.2],[1.0,0.2,1.2,4.95],[0,4.95,11.45,5.05],[13.2,4.95,14,5.05],[0,5.05,0.2,9],[0.2,8.8,13.8,9],[13.8,0,14,9],[9.95,0.2,10.05,3.95],[9.95,3.95,13.8,4.05],[2.55,5.05,2.65,8.8],[6.4,5.05,6.5,8.8],[10.72,5.05,10.82,8.8],[10.82,6.2,13.8,6.3],[12.46,6.3,12.56,8.8]];
-  WALLS.forEach(w=>wallWithHoles(w,0,H,wallMat,true));
+  // the WC1 / WC2 partition stops at the top of the WC slab (+2.5): the storage loft above runs across both WCs
+  WALLS.forEach(w=>wallWithHoles(w,0,w[0]===12.46&&w[2]===12.56?2.5:H,wallMat,true));
   const wcTile=M(0xe9ecee);
   [[10.82,6.3,10.84,8.8],[12.44,6.3,12.46,8.8],[12.56,6.3,12.58,8.8],[13.78,6.3,13.8,8.8],[10.84,6.3,12.44,6.32],[12.58,6.3,13.78,6.32],[10.84,8.78,12.44,8.8],[12.58,8.78,13.78,8.8]].forEach(w=>wallWithHoles(w,0,2.4,wcTile,false));
   // Mouldings (as in the client's reference photo), 4 cm proud of the outside wall faces and cut around doors /
@@ -372,7 +375,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   for(let i=0;i<5;i++){const b=new THREE.Mesh(new THREE.SphereGeometry(0.07,16,10,0,Math.PI*2,0,Math.PI/2),M(0xe9edf2));b.position.set(9.78-7,1.92,1.3+i*0.17-4.5);rackG.add(b);rackParts.push(b);}
   armL=box(9.7,1.09,9.75,1.11,1.6,2.0,rackMat,false);armR=box(9.7,2.14,9.75,2.16,1.6,2.0,rackMat,false);});
   obj('tuLanh','Tủ lạnh','Bếp + ăn',true,()=>box(9.25,2.76,9.95,3.46,0,1.8,steel));
-  obj('tuXanh','Tủ nhỏ màu xanh','Bếp + ăn',true,()=>box(7.32,0.2,7.82,0.7,0,1.1,blue));
+  obj('tuXanh','Tủ nhỏ màu xanh','Bếp + ăn',true,()=>box(7.44,0.2,7.88,0.7,0,1.1,blue));
   obj('lavabo','Bàn lavabo đôi + gương','Lavabo',true,()=>{box(10.82,5.12,11.32,6.08,0.18,0.82,M(0x6b4430));box(10.82,5.12,10.83,6.08,0,0.18,M(0x3a2a20),false);
   box(10.82,5.1,11.37,6.1,0.82,0.86,M(0xf1efea));
   [5.36,5.84].forEach(z=>{cyl(11.11,0.92,z,0.17,0.13,0.12,ceramic);cyl(11.11,0.975,z,0.15,0.15,0.005,M(0xdfe6ea));
@@ -745,12 +748,12 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
         side(A,B);side(B,C);side(C,D);side(D,A);pts.forEach(([x,z])=>down(x,z,CEIL,R.bulb,r.room));
       }else if(WC_SLAB[r.room]){
         // WCs: a 100 mm concrete slab at +2.4 (painted underside), the void above it (to the flat roof) is a storage
-        // loft (gác để đồ) opened from the Lavabo side through a hatch above the WC door
+        // loft (gác để đồ) opened from the Lavabo side through a single hatch above the WC1 door (the loft spans both WCs)
         const sl=new THREE.Mesh(new THREE.BoxGeometry(x1-x0+0.06,0.1,z1-z0+0.06),slabMat);sl.position.set(cx-7,WC_CEIL+0.05,cz-4.5);scene.add(sl);
         down(cx,cz,WC_CEIL,R.bulb,r.room);
-        const hx=mx(WC_SLAB[r.room]),fz=mz(6.2)-4.5;   // hatch on the Lavabo face of the WC wall
-        const hd=new THREE.Mesh(new THREE.BoxGeometry(0.66,0.56,0.025),hatchMat);hd.position.set(hx-7,2.84,fz-0.0125);scene.add(hd);
-        const hh=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.02,0.02),M(0x9aa0a6));hh.position.set(hx-7,2.66,fz-0.035);scene.add(hh);
+        const hx=mx(WC_SLAB[r.room]),fz=mz(6.2)-4.5;   // the one hatch (WC1 only), on the Lavabo face of the WC wall
+        if(r.room==='WC1'){const hd=new THREE.Mesh(new THREE.BoxGeometry(0.66,0.56,0.025),hatchMat);hd.position.set(hx-7,2.84,fz-0.0125);scene.add(hd);
+        const hh=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.02,0.02),M(0x9aa0a6));hh.position.set(hx-7,2.66,fz-0.035);scene.add(hh);}
         // a few storage boxes on the slab (seen with the roof off)
         [[0.25,0.45,0.42,0.32],[0.75,0.3,0.4,0.3],[0.3,1.2,0.5,0.35],[0.7,1.75,0.38,0.28]].forEach(([u,v,s2,h2])=>{if(u+s2/2>w-0.05)return;
           const bx=new THREE.Mesh(new THREE.BoxGeometry(s2,h2,s2*0.8),loftBox);bx.position.set(a0+u-7,WC_CEIL+0.1+h2/2,b0+v+0.3-4.5);scene.add(bx);});
@@ -781,7 +784,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const g=new THREE.BoxGeometry(Math.abs(x1-x0),y1-y0,Math.abs(z1-z0)),m=new THREE.Mesh(g,mat);
     m.position.set((x0+x1)/2-7,(y0+y1)/2,(z0+z1)/2-4.5);structG.add(m);
     const e=new THREE.LineSegments(new THREE.EdgesGeometry(g),sEdge);e.position.copy(m.position);structG.add(e);};
-  const structure={group:structG,columns:0,footings:0,groundBeam:0,tieBeam:0};
+  const structure:House['structure']={group:structG,columns:0,footings:0,groundBeam:0,tieBeam:0,cols:[],beams:[]};
   {
     const C=0.22,MAXSPAN=5.0,FOOT=1.0;
     const Y={foot0:-1.6,foot1:-1.3,gb0:-0.7,gb1:-0.3,tie0:E1-0.3,tie1:E1};
@@ -803,30 +806,40 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     // the middle, one on the bedroom-3 wall x = 10 carried on to the middle wall), each with a column at both ends
     // and a beam across. The middle wall (z = 5) is carried by those frames; thin partitions (WC, the corridor
     // stub, bedroom 3's inner walls, the x = 10.77 wall's front end) just sit on the beams.
-    const facade:Line={axis:'x',at:0.1,a0:1.0,a1:14},spine:Line={axis:'x',at:5.0,a0:0,a1:11.45};
-    for(const p of [[1.1,0.1],[13.9,0.1],[13.9,4],[0.1,5],[1.1,5],[0.1,8.9],[2.6,8.9],[6.45,8.9],[10.77,8.9],[13.9,8.9],[10.77,6.25],[13.9,6.25]])addPt(p[0],p[1]);
+    const facade:Line={axis:'x',at:0.1,a0:1.0,a1:14};
+    // Bedroom 1 / 2 columns sit in the room corners (where the bedroom walls meet the middle wall: x = 2.6, 6.45,
+    // 10.77), not mid-wall. The middle cross frame runs on the PN1/PN2 wall line x = 6.45 to the facade (the 0.8 m
+    // kitchen window sits just west of it). x = 10: column at the bedroom-3 / corridor corner; the short beam on to
+    // the middle wall lands on the middle-wall beam (no column there, it would stand in bedroom 2).
+    for(const p of [[1.1,0.1],[13.9,0.1],[13.9,4],[0.1,5],[1.1,5],[2.6,5],[6.45,5],[10.77,5],[0.1,8.9],[2.6,8.9],[6.45,8.9],[10.77,8.9],[13.9,8.9],[10.77,6.25],[13.9,6.25],[10,4]])addPt(p[0],p[1]);
     const cross:Line[]=[];
-    const mid=nudge(1.1+(10-1.1)/2,[facade,spine],2.5,8.5);
-    if(mid!==null){addPt(mid,0.1);addPt(mid,5.0);cross.push({axis:'z',at:mid,a0:0.1,a1:5.0});}
+    const mid=nudge(6.45,[facade],5.5,7.5);
+    if(mid!==null){addPt(mid,0.1);cross.push({axis:'z',at:6.45,a0:0.1,a1:5.0});}
     addPt(10,0.1);
-    const x10=nudge(10,[spine],9.5,10.6);if(x10!==null){addPt(x10,5.0);cross.push({axis:'z',at:x10,a0:4.0,a1:5.0});}
+    cross.push({axis:'z',at:10,a0:4.0,a1:5.0});
     // a column on the open beams and outside walls wherever a span grows past MAXSPAN (room stretched)
     for(const l of [...lines,...cross]){
       const on=pts.filter(p=>Math.abs((l.axis==='x'?p[1]:p[0])-l.at)<0.05).map(p=>l.axis==='x'?p[0]:p[1]).sort((p,q)=>p-q);
       for(let i=0;i+1<on.length;i++){
-        const s0=on[i],s1=on[i+1],n=Math.ceil((mapA(l,s1)-mapA(l,s0))/MAXSPAN);
+        const s0=on[i],s1=on[i+1];
+        // the living room keeps a clear 5.35 m facade span (1.1 → 6.45, over the 4-leaf window): no extra column
+        // or cross beam in the middle of the room, by the owner's choice
+        if(l.axis==='x'&&Math.abs(l.at-0.1)<0.05&&Math.abs(s0-1.1)<0.05&&Math.abs(s1-6.45)<0.05)continue;
+        const n=Math.ceil((mapA(l,s1)-mapA(l,s0))/MAXSPAN);
         for(let k=1;k<n;k++){const c=nudge(s0+(s1-s0)*k/n,[l],s0+0.8,s1-0.8);if(c!==null)l.axis==='x'?addPt(c,l.at):addPt(l.at,c);}}
     }
     lines.push(...cross);
-    // porch columns stand on their own footings, tied back to the house by ground beams
-    const porch:[number,number][]=[[-0.625,0.175],[-0.625,4.775]];
+    // Porch (1.8 m deep, only the small porch roof on it): no footings of its own. Its two columns stand on ground
+    // beams cantilevered out from the house: the facade beam line (z = 0.1) carried on, and one hard against the
+    // middle-wall corner (core at z = 4.84, inside the 350 cladding), plus a front ground beam linking the two.
+    const porch:[number,number][]=[[-0.625,0.11],[-0.625,4.84]];
     // footings + columns (mapped centres; sizes stay real)
     // The middle wall (and any 110 wall running along x) is built flush with the FRONT face of its columns, so the
     // living room / kitchen / corridor side is flat: the column (and the beams on that line) shift towards the
     // bedrooms and stick out ~110 mm there only, shown as a pilaster (trụ áp tường) in the wall colour.
     const thinX=(x:number,z:number)=>WALLS.find(w=>(w[3]-w[1])<0.15&&(w[2]-w[0])>(w[3]-w[1])&&Math.abs((w[1]+w[3])/2-z)<0.02&&x>=w[0]-0.01&&x<=w[2]+0.01);
     const colZ=(x:number,z:number)=>{const w=thinX(x,z);return w?mz(w[1])+C/2:mz(z);};
-    for(const [x,z] of pts){const X=mx(x),Z=colZ(x,z);
+    for(const [x,z] of pts){const X=mx(x),Z=colZ(x,z);structure.cols.push({x:X,z:Z,porch:false});
       sbox(X-FOOT/2,Z-FOOT/2,X+FOOT/2,Z+FOOT/2,Y.foot0,Y.foot1,SM.foot);
       sbox(X-C/2,Z-C/2,X+C/2,Z+C/2,Y.foot1,Y.tie1,SM.col);structure.columns++;structure.footings++;}
     noMap=true;
@@ -834,16 +847,17 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
       if(!WALLS.some(w=>Math.min(w[2]-w[0],w[3]-w[1])<0.15&&x>=w[0]-0.01&&x<=w[2]+0.01&&z>=w[1]-0.01&&z<=w[3]+0.01))continue;
       const X=mx(x),Z=colZ(x,z),f=thinX(x,z)?0.003:0;box(X-C/2,Z-C/2+f,X+C/2,Z+C/2,0,Y.tie1,wallMat,true);} // flush face: 3 mm behind, no z-fight
     noMap=false;
-    for(const [x,z] of porch){const X=mx(x),Z=mz(z);
-      sbox(X-FOOT/2,Z-FOOT/2,X+FOOT/2,Z+FOOT/2,Y.foot0,Y.foot1,SM.foot);
-      sbox(X-C/2,Z-C/2,X+C/2,Z+C/2,Y.foot1,PC,SM.col);structure.columns++;structure.footings++;}
+    for(const [x,z] of porch){const X=mx(x),Z=mz(z);structure.cols.push({x:X,z:Z,porch:true});
+      sbox(X-C/2,Z-C/2,X+C/2,Z+C/2,Y.gb0,PC,SM.col);structure.columns++;}
     // beams along every wall line; the eave tie beam on every wall
     const beam=(l:Line,y0:number,y1:number,mat:THREE.Material)=>{
       const p=mapA(l,l.a0),q=mapA(l,l.a1),c=l.axis==='x'?colZ((l.a0+l.a1)/2,l.at):mx(l.at);
       if(l.axis==='x')sbox(p,c-C/2,q,c+C/2,y0,y1,mat);else sbox(c-C/2,p,c+C/2,q,y0,y1,mat);return q-p;};
-    for(const l of lines){structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);structure.tieBeam+=beam(l,Y.tie0,Y.tie1,SM.tie);}
-    for(const l of [{axis:'z',at:-0.625,a0:0.175,a1:4.775},{axis:'x',at:0.175,a0:-0.625,a1:1.1},{axis:'x',at:4.775,a0:-0.625,a1:1.1}] as Line[])
-      {structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);structure.tieBeam+=beam(l,PC,PC+0.3,SM.tie);}
+    const rec=(l:Line,porch:boolean)=>{const p=l.axis==='x'?mx(l.a0):mz(l.a0),q=l.axis==='x'?mx(l.a1):mz(l.a1),c=l.axis==='x'?colZ((l.a0+l.a1)/2,l.at):mx(l.at);
+      structure.beams.push(l.axis==='x'?{x0:p,z0:c,x1:q,z1:c,porch}:{x0:c,z0:p,x1:c,z1:q,porch});};
+    for(const l of lines){structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);structure.tieBeam+=beam(l,Y.tie0,Y.tie1,SM.tie);rec(l,false);}
+    for(const l of [{axis:'z',at:-0.625,a0:0.11,a1:4.84},{axis:'x',at:0.11,a0:-0.625,a1:1.1},{axis:'x',at:4.84,a0:-0.625,a1:1.1}] as Line[])
+      {structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);structure.tieBeam+=beam(l,PC,PC+0.3,SM.tie);rec(l,true);}
   }
   // ---- electrical fittings (electrical.ts): 2-way switches (click / E toggles the room's lights), sockets, air
   // conditioners, wall TVs, water heaters, the living-room camera and the main panel, on their wall faces.

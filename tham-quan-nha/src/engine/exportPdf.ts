@@ -106,7 +106,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   const hz0 = Math.min(zA, zB), hz1 = Math.max(zA, zB);
   const E1 = 3.9, ridge = E1 + F.rise, size = `${fmtM(map.houseD)} × ${fmtM(map.houseW)}`;
   const date = new Date().toLocaleDateString('vi-VN');
-  const TOTAL = 13;
+  const TOTAL = 14;
 
   // ---------------- renders ----------------
   onProgress('Đang dựng hình phối cảnh…');
@@ -191,7 +191,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     heading(g, 'DANH MỤC BẢN VẼ', x, y += 10);
     table(g, x, y + 30, [{ t: 'Ký hiệu', w: 150 }, { t: 'Tên bản vẽ', w: 680 }], [
       ['KT-00', 'Trang bìa & tổng quan'], ['KT-01', 'Mặt bằng bố trí & kích thước'], ['KT-01B', 'Mặt bằng 3D (bỏ mái)'], ['KT-02', 'Mặt đứng chính (Nam) & mặt đứng sau (Bắc)'],
-      ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-07', 'Thống kê nội thất'], ['KT-08', 'Mặt bằng điện'], ['KT-09', 'Sơ đồ nguyên lý tủ điện & phụ tải'], ['KT-10', 'Phối cảnh ngoại thất 3D'], ['KT-11', 'Phối cảnh nội thất 3D'],
+      ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-05B', 'Định vị cột C, dầm D'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-07', 'Thống kê nội thất'], ['KT-08', 'Mặt bằng điện'], ['KT-09', 'Sơ đồ nguyên lý tủ điện & phụ tải'], ['KT-10', 'Phối cảnh ngoại thất 3D'], ['KT-11', 'Phối cảnh nội thất 3D'],
     ], 38, 20);
     pages.push(c);
   }
@@ -381,6 +381,65 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     g.fillStyle = SOFT; g.font = `400 19px ${FONT}`;
     ['Nhịp cột phổ biến 3.5–5 m.', 'Cột ở tường 110 lồi thành trụ áp tường phía phòng ngủ.', 'Mái bằng + téc 1500 L: nên dùng dầm 220 × 400 và móng 1.2–1.4 m.',
       'Số liệu sơ bộ để hình dung — kích thước thép, bê tông, móng phải do', 'kỹ sư kết cấu tính theo địa chất thực tế.'].forEach(l => { g.fillText(l, lx, ly, PW - M - 30 - lx); ly += 30; });
+    pages.push(c);
+  }
+
+  // ---------------- KT-05B column / beam setting-out plan (C1…, D1…) ----------------
+  {
+    const { c, g, top: t } = page('ĐỊNH VỊ CỘT & DẦM', 'KT-05B', pages.length + 1, TOTAL, date, size);
+    heading(g, 'MẶT BẰNG ĐỊNH VỊ CỘT C, DẦM D (SƠ BỘ)', planBox.X, M + 70, 'Tâm cột / tim dầm theo mặt bằng kiến trúc hiện tại · gốc toạ độ: góc Đông-Nam tường bao (trục A1) · m');
+    g.globalAlpha = 0.35; drawBase(g, false); g.globalAlpha = 1;
+    const P = planP, S = d.structure;
+    const ox = map.mx(0), oz = map.mz(0), r2 = (v: number) => Math.round(v * 100) / 100;
+    // columns numbered row by row (front facade first), porch last
+    const cols = [...S.cols].sort((a, b) => (+a.porch - +b.porch) || (Math.round(a.z * 4) - Math.round(b.z * 4)) || (a.x - b.x)).map((c2, i) => ({ ...c2, id: `C${i + 1}` }));
+    const near = (a: number, b: number, tol = 0.16) => Math.abs(a - b) <= tol;
+    // beams: supports = columns on the beam line; spans between them; ends without a column land on another beam
+    const beams = S.beams.filter(b => Math.hypot(b.x1 - b.x0, b.z1 - b.z0) > 0.5).map((b, i) => {
+      const alongX = Math.abs(b.x1 - b.x0) >= Math.abs(b.z1 - b.z0), a0 = alongX ? Math.min(b.x0, b.x1) : Math.min(b.z0, b.z1), a1 = alongX ? Math.max(b.x0, b.x1) : Math.max(b.z0, b.z1), at = alongX ? b.z0 : b.x0;
+      const sup = cols.filter(c2 => near(alongX ? c2.z : c2.x, at) && (alongX ? c2.x : c2.z) >= a0 - 0.2 && (alongX ? c2.x : c2.z) <= a1 + 0.2).sort((p, q) => (alongX ? p.x - q.x : p.z - q.z));
+      const stops = [a0, ...sup.map(c2 => alongX ? c2.x : c2.z), a1].sort((p, q) => p - q);
+      let span = 0; for (let k = 0; k + 1 < stops.length; k++) span = Math.max(span, stops[k + 1] - stops[k]);
+      const h = Math.max(300, Math.ceil(span * 1000 / 12 / 50) * 50);
+      return { ...b, id: `D${i + 1}`, alongX, a0, a1, at, sup, len: a1 - a0, span, h };
+    });
+    // beams (centre lines) + labels
+    for (const b of beams) {
+      const p = P(b.x0, b.z0), q = P(b.x1, b.z1);
+      g.strokeStyle = b.h > 300 ? 'rgba(192,57,43,.9)' : 'rgba(217,154,30,.95)'; g.lineWidth = b.h > 300 ? 9 : 7; g.beginPath(); g.moveTo(...p); g.lineTo(...q); g.stroke();
+      const tt = [0.5, 0.35, 0.65, 0.25, 0.75].find(f => !cols.some(c2 => Math.hypot(c2.x - (b.x0 + (b.x1 - b.x0) * f), c2.z - (b.z0 + (b.z1 - b.z0) * f)) < 1.0)) ?? 0.5;
+      const m: [number, number] = [p[0] + (q[0] - p[0]) * tt, p[1] + (q[1] - p[1]) * tt], vert = Math.abs(q[1] - p[1]) > Math.abs(q[0] - p[0]);
+      const lx2 = m[0] + (vert ? 26 : 0), ly2 = m[1] + (vert ? 0 : -16);
+      g.font = `700 17px ${FONT}`; const tw = g.measureText(b.id).width + 10;
+      g.fillStyle = '#fff'; g.fillRect(lx2 - tw / 2, ly2 - 14, tw, 22); g.fillStyle = '#8a5a00'; g.textAlign = 'center'; g.fillText(b.id, lx2, ly2 + 3); g.textAlign = 'left';
+    }
+    // columns
+    for (const c2 of cols) {
+      const [x, y] = P(c2.x, c2.z), hs = Math.abs(P(c2.x + 0.11, c2.z)[0] - x);
+      g.fillStyle = '#c23b2e'; g.fillRect(x - hs, y - hs, 2 * hs, 2 * hs);
+      g.font = `700 18px ${FONT}`; const tw = g.measureText(c2.id).width + 10;
+      g.fillStyle = 'rgba(255,255,255,.92)'; g.fillRect(x + hs + 2, y - hs - 24, tw, 22); g.fillStyle = '#c23b2e'; g.fillText(c2.id, x + hs + 7, y - hs - 7);
+    }
+    // grid dimension chains between column lines (edited coords), outside the house
+    const uniq = (v: number[]) => v.sort((a, b) => a - b).filter((x, i, arr) => i === 0 || x - arr[i - 1] > 0.3);
+    const xs = uniq(cols.filter(c2 => !c2.porch).map(c2 => c2.x)), zs = uniq(cols.filter(c2 => !c2.porch).map(c2 => c2.z));
+    const zS = map.mz(0) - 0.0, xW = map.mx(14);
+    for (let k = 0; k + 1 < xs.length; k++) { const pa = P(xs[k], zS), pb = P(xs[k + 1], zS); const dir = Math.sign(P(xs[k], zS - 1)[1] - pa[1]); dimLine(g, pa, pb, fmtM(xs[k + 1] - xs[k]), [0, dir * 95]); }
+    for (let k = 0; k + 1 < zs.length; k++) { const pa = P(xW, zs[k]), pb = P(xW, zs[k + 1]); const dir = Math.sign(P(xW + 1, zs[k])[0] - pa[0]); dimLine(g, pa, pb, fmtM(zs[k + 1] - zs[k]), [dir * 95, 0]); }
+    // right column: principles + tables
+    const lx = planBox.X + planBox.W + 50, lw = PW - M - 30 - lx; let ly = t + 40;
+    heading(g, 'NGUYÊN TẮC BỐ TRÍ', lx, ly); ly += 30; g.font = `400 17px ${FONT}`; g.fillStyle = INK;
+    ['Hai hàng cột biên chạy dọc nhà (mặt tiền, tường hậu).', 'Không có cột đứng giữa phòng khách, bếp: cột chỉ ở chân tường.',
+      'Cột giữa nhà chỉ ở góc phòng kín, trùng tường (tường giữa).', 'Hệ dầm móng liên kết toàn bộ chân cột (kể cả hiên).',
+      'Dầm đỏ: nhịp lớn, cao ≥ 350 — kỹ sư tính lại theo tải thực tế.'].forEach(l2 => { ly += 26; g.fillText('• ' + l2, lx, ly, lw); });
+    ly += 70; heading(g, 'BẢNG CỘT', lx, ly);
+    const half = Math.ceil(cols.length / 2), colRows = (arr: typeof cols) => arr.map(c2 => [c2.id, r2(c2.x - ox).toFixed(2), r2(c2.z - oz).toFixed(2), c2.porch ? 'hiên' : '220×220']);
+    const ccols = [{ t: 'Cột', w: 62 }, { t: 'X', w: 70, right: true }, { t: 'Z', w: 70, right: true }, { t: 'Tiết diện', w: 100 }];
+    table(g, lx, ly + 22, ccols, colRows(cols.slice(0, half)), 27, 15);
+    ly = table(g, lx + 320, ly + 22, ccols, colRows(cols.slice(half)), 27, 15) + 75;
+    heading(g, 'BẢNG DẦM GIẰNG', lx, ly);
+    const bRows = beams.map(b => [b.id, b.alongX ? `Z = ${r2(b.at - oz).toFixed(2)}` : `X = ${r2(b.at - ox).toFixed(2)}`, fmtM(b.len), fmtM(b.span), b.sup.map(c2 => c2.id).join(' ') || 'gối dầm', `220×${b.h}`]);
+    table(g, lx, ly + 22, [{ t: 'Dầm', w: 56 }, { t: 'Trục', w: 110 }, { t: 'Dài', w: 64, right: true }, { t: 'Nhịp max', w: 86, right: true }, { t: 'Gối lên cột', w: 220 }, { t: 'Sơ bộ', w: 90 }], bRows, 25, 14);
     pages.push(c);
   }
 
