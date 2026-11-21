@@ -214,10 +214,10 @@ export class Game {
   /** Render one view off-screen and return it as a PNG data URL. Orthographic views take the half extents of the
    *  frame in world metres; `clipY` cuts everything above that height (floor plans); `structure` shows the frame
    *  with the house ghosted. Labels, dimension overlays, the character and fog are hidden while rendering. */
-  snapshot(v: { pos: V3; target: V3; up?: V3; half?: [number, number]; fov?: number }, o: { w: number; h: number; roof: boolean; structure?: boolean; clipY?: number }): string {
+  snapshot(v: { pos: V3; target: V3; up?: V3; half?: [number, number]; fov?: number }, o: { w: number; h: number; roof: boolean; structure?: boolean; clipY?: number; labels?: boolean }): string {
     const h = this.house, keep = { roof: h.roof.visible, labels: h.labels.map(s => s.visible), dims: this.dims.group.visible, hero: this.hero.root.visible,
       shadow: this.hero.shadow.visible, marker: this.marker.visible, fog: this.scene.fog, bg: (this.scene.background as THREE.Color).clone(), struct: this.structOn, ratio: this.renderer.getPixelRatio() };
-    h.roof.visible = o.roof; h.labels.forEach(s => { s.visible = false; }); this.dims.group.visible = false;
+    h.roof.visible = o.roof; h.labels.forEach(s => { s.visible = !!o.labels; }); this.dims.group.visible = false;
     this.hero.root.visible = this.hero.shadow.visible = this.marker.visible = false;
     this.scene.fog = null; (this.scene.background as THREE.Color).set(0xffffff);
     if (!!o.structure !== this.structOn) { this.structOn = !!o.structure; this.applyStructure(); }

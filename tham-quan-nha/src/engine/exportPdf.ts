@@ -105,7 +105,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   const hz0 = Math.min(zA, zB), hz1 = Math.max(zA, zB);
   const E1 = 3.9, ridge = E1 + F.rise, size = `${fmtM(map.houseD)} × ${fmtM(map.houseW)}`;
   const date = new Date().toLocaleDateString('vi-VN');
-  const TOTAL = 10;
+  const TOTAL = 11;
 
   // ---------------- renders ----------------
   onProgress('Đang dựng hình phối cảnh…');
@@ -156,6 +156,9 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     { k: 'i6', cap: 'Phòng thờ', pos: V(0.35, 1.85, 8.65), target: V(2.3, 0.9, 6.5), fov: 78, roof: true },
   ];
   const GW = 1110, GH = 940;
+  // 3D plan (roof off, room names), as seen from above in the overview
+  const p3w = PW - 2 * M - 120, p3h = PH - 2 * M - TB - 170;
+  await snap('plan3d', { pos: [pcx, 21, pcz - 3.2], target: [pcx, 0, pcz - 0.2], fov: 40 }, { w: Math.round(p3w * 0.75), h: Math.round(p3h * 0.75), roof: false, labels: true });
   for (const v of views3d) await snap(v.k, { pos: v.pos, target: v.target, fov: v.fov }, { w: GW, h: GH, roof: v.roof });
 
   onProgress('Đang dàn trang…');
@@ -163,7 +166,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
 
   // ---------------- KT-00 cover ----------------
   {
-    const { c, g, top: t } = page('TRANG BÌA & TỔNG QUAN', 'KT-00', 1, TOTAL, date, size);
+    const { c, g, top: t } = page('TRANG BÌA & TỔNG QUAN', 'KT-00', pages.length + 1, TOTAL, date, size);
     g.fillStyle = INK; g.font = `800 64px ${FONT}`; g.fillText('HỒ SƠ THIẾT KẾ', M + 60, t + 70);
     g.font = `600 40px ${FONT}`; g.fillStyle = ACC; g.fillText(`${PROJECT} ${size} m — mái ngói, sảnh hiên, phòng thờ`, M + 60, t + 130);
     const img = renders.persp, maxH = PH - M - TB - 40 - (t + 170), iw = Math.min(1440, maxH * img.width / img.height), ih = iw * img.height / img.width;
@@ -185,7 +188,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     ]) + 50;
     heading(g, 'DANH MỤC BẢN VẼ', x, y += 10);
     table(g, x, y + 30, [{ t: 'Ký hiệu', w: 150 }, { t: 'Tên bản vẽ', w: 680 }], [
-      ['KT-00', 'Trang bìa & tổng quan'], ['KT-01', 'Mặt bằng bố trí & kích thước'], ['KT-02', 'Mặt đứng chính (Nam) & mặt đứng sau (Bắc)'],
+      ['KT-00', 'Trang bìa & tổng quan'], ['KT-01', 'Mặt bằng bố trí & kích thước'], ['KT-01B', 'Mặt bằng 3D (bỏ mái)'], ['KT-02', 'Mặt đứng chính (Nam) & mặt đứng sau (Bắc)'],
       ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-07', 'Thống kê nội thất'], ['KT-08', 'Phối cảnh ngoại thất 3D'], ['KT-09', 'Phối cảnh nội thất 3D'],
     ], 38, 20);
     pages.push(c);
@@ -196,7 +199,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   d.openings.doors.filter(o => !o.hidden).forEach((o, i) => codes.doors.set(o.id, `D${i + 1}`));
   d.openings.wins.filter(o => !o.hidden).forEach((o, i) => codes.wins.set(o.id, `S${i + 1}`));
   {
-    const { c, g } = page('MẶT BẰNG BỐ TRÍ & KÍCH THƯỚC', 'KT-01', 2, TOTAL, date, size);
+    const { c, g } = page('MẶT BẰNG BỐ TRÍ & KÍCH THƯỚC', 'KT-01', pages.length + 1, TOTAL, date, size);
     heading(g, 'MẶT BẰNG TẦNG 1', planBox.X, M + 70, 'Cắt ngang ở cao độ +1.300 · kích thước tính bằng m');
     g.drawImage(renders.plan, pf.X, pf.Y, pf.W, pf.H);
     const P = (x: number, z: number) => { const w = W(x, z); return topXY(pf, w[0], w[1]); };
@@ -277,6 +280,15 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     pages.push(c);
   }
 
+  // ---------------- KT-01B 3D plan ----------------
+  {
+    const { c, g, top: t } = page('MẶT BẰNG 3D (BỎ MÁI)', 'KT-01B', pages.length + 1, TOTAL, date, size);
+    heading(g, 'MẶT BẰNG 3D — BỐ TRÍ NỘI THẤT', M + 60, t + 40, 'Nhìn từ trên xuống, bỏ mái · hướng Bắc ở trên, sảnh (Đông) bên phải');
+    const img = renders.plan3d; g.drawImage(img, M + 60, t + 100, p3w, p3h - 20);
+    g.strokeStyle = LINE; g.lineWidth = 1.5; g.strokeRect(M + 60, t + 100, p3w, p3h - 20);
+    pages.push(c);
+  }
+
   // ---------------- KT-02 / KT-03 elevations ----------------
   const drawElev = (g: CanvasRenderingContext2D, e: typeof elev[number], X: number, Y: number, w: number) => {
     const img = renders['e' + e.k], h = w * img.height / img.width, hw = Math.max(ehwX, ehwZ), hh = hw * img.height / img.width;
@@ -297,8 +309,8 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     const pa: [number, number] = [px(a0), yb], pb: [number, number] = [px(a1), yb];
     dimLine(g, pa[0] < pb[0] ? pa : pb, pa[0] < pb[0] ? pb : pa, `${fmtM(Math.abs(a1 - a0))} m (tường bao)`, [0, 46]);
   };
-  for (const [k, pair, code, n] of [['KT-02', ['S', 'N'], 'MẶT ĐỨNG CHÍNH & SAU', 3], ['KT-03', ['E', 'W'], 'MẶT ĐỨNG BÊN', 4]] as const) {
-    const { c, g, top: t, bottom } = page(code, k, n, TOTAL, date, size);
+  for (const [k, pair, code] of [['KT-02', ['S', 'N'], 'MẶT ĐỨNG CHÍNH & SAU', 3], ['KT-03', ['E', 'W'], 'MẶT ĐỨNG BÊN', 4]] as const) {
+    const { c, g, top: t, bottom } = page(code, k, pages.length + 1, TOTAL, date, size);
     const avail = bottom - t - 40, w = Math.min(PW - 2 * M - 120, (avail / 2 - 110) * EW / EH);
     pair.forEach((key, i) => drawElev(g, elev.find(e => e.k === key)!, M + 60, t + 60 + i * (avail / 2 + 20), w));
     // finishes / colours (from Cài đặt → Màu)
@@ -321,7 +333,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
 
   // ---------------- KT-04 roof plan ----------------
   {
-    const { c, g } = page('MẶT BẰNG MÁI', 'KT-04', 5, TOTAL, date, size);
+    const { c, g } = page('MẶT BẰNG MÁI', 'KT-04', pages.length + 1, TOTAL, date, size);
     heading(g, 'MẶT BẰNG MÁI', planBox.X, M + 70, 'Mái ngói dốc 4 phía + mái bằng bê tông trên khu WC (đặt téc nước)');
     g.drawImage(renders.roof, pf.X, pf.Y, pf.W, pf.H);
     const lx = planBox.X + planBox.W + 70; let ly = M + 150; northArrow(g, lx + 40, ly + 40); ly += 140;
@@ -343,7 +355,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
 
   // ---------------- KT-05 structure ----------------
   {
-    const { c, g, top: t } = page('KẾT CẤU SƠ BỘ', 'KT-05', 6, TOTAL, date, size);
+    const { c, g, top: t } = page('KẾT CẤU SƠ BỘ', 'KT-05', pages.length + 1, TOTAL, date, size);
     heading(g, 'MẶT BẰNG KẾT CẤU (SƠ BỘ)', planBox.X, M + 70, 'Móng đơn, dầm móng, cột, dầm giằng — tự sinh theo tường hiện tại');
     g.drawImage(renders.struct, pf.X, pf.Y, pf.W, pf.H);
     const lx = planBox.X + planBox.W + 70; let ly = t + 40;
@@ -363,7 +375,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
 
   // ---------------- KT-06 schedules: doors, windows ----------------
   {
-    const { c, g, top: t } = page('THỐNG KÊ CỬA ĐI, CỬA SỔ & PHÒNG', 'KT-06', 7, TOTAL, date, size);
+    const { c, g, top: t } = page('THỐNG KÊ CỬA ĐI, CỬA SỔ & PHÒNG', 'KT-06', pages.length + 1, TOTAL, date, size);
     let y = t + 40; heading(g, 'THỐNG KÊ CỬA ĐI', M + 60, y);
     y = table(g, M + 60, y + 26, [{ t: 'Ký hiệu', w: 130 }, { t: 'Tên', w: 420 }, { t: 'Phòng', w: 230 }, { t: 'Rộng × cao (mm)', w: 260 }, { t: 'Loại', w: 760 }, { t: 'SL', w: 80, right: true }],
       d.openings.doors.filter(o => !o.hidden).map(o => {
@@ -380,7 +392,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
 
   // ---------------- KT-07 furniture ----------------
   {
-    const { c, g, top: t } = page('THỐNG KÊ NỘI THẤT', 'KT-07', 8, TOTAL, date, size);
+    const { c, g, top: t } = page('THỐNG KÊ NỘI THẤT', 'KT-07', pages.length + 1, TOTAL, date, size);
     heading(g, 'THỐNG KÊ NỘI THẤT & THIẾT BỊ', M + 60, t + 40, 'Kích thước bao: rộng (theo trục Đông–Tây) × sâu × cao, mm');
     const rows = [...d.objects].sort((a, b) => a.room.localeCompare(b.room, 'vi')).map((o, i) => [String(i + 1), o.label, o.room, `${mm(o.size[0])} × ${mm(o.size[1])} × ${mm(o.size[2])}`]);
     const half = Math.ceil(rows.length / 2), cols = [{ t: 'TT', w: 70 }, { t: 'Tên', w: 470 }, { t: 'Phòng', w: 250 }, { t: 'Kích thước (mm)', w: 330 }];
@@ -390,8 +402,8 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   }
 
   // ---------------- KT-08 / KT-09 3D views (3 x 2 grid) ----------------
-  for (const [code, title, prefix, n] of [['KT-08', 'PHỐI CẢNH NGOẠI THẤT 3D', 'x', 9], ['KT-09', 'PHỐI CẢNH NỘI THẤT 3D', 'i', 10]] as const) {
-    const { c, g, top: t, bottom } = page(title, code, n, TOTAL, date, size);
+  for (const [code, title, prefix] of [['KT-08', 'PHỐI CẢNH NGOẠI THẤT 3D', 'x', 9], ['KT-09', 'PHỐI CẢNH NỘI THẤT 3D', 'i', 10]] as const) {
+    const { c, g, top: t, bottom } = page(title, code, pages.length + 1, TOTAL, date, size);
     heading(g, title, M + 60, t + 40);
     const list = views3d.filter(v => v.k.startsWith(prefix)), gap = 34, x0 = M + 60, y0 = t + 80;
     const cw = (PW - 2 * M - 120 - 2 * gap) / 3, ch = (bottom - y0 - gap) / 2 - 50;
