@@ -30,10 +30,11 @@ There are no tests.
 - **Beds:** `bed()` records the beds in `beds`, and `lieDown()` lays the character face-up with its head at the headboard.
 - **Orientation (per the client):** the porch/sảnh side (plan x = 0) faces **east**, and the x = 14 wall faces **west**. The west wall has a window beside the washing machine and one beside the P. ngủ 3 bed. New windows are appended to `WIN`; don't reorder it, because `AWNING` is an index.
 - **Site:** on the south side (facade z = 0, the left side seen from the porch) there is a 1.5 m paved side path (plan z −1.5..0), a 1.8 m boundary wall (z −1.7..−1.5, y −0.3..1.5), and beyond it a ditch (z −3.4..−1.7). The ground box is split around the ditch. The wall runs past the walking BOUNDS, so the ditch can't be reached.
-- **Main entrance (x = 1.1, plan z 0.975–4.175):** a dark-aluminium and smoked-glass double door with gold leading (`goldGrid`), corner ornaments (`cornerOrn`) and long gold bar handles. It has fixed 0.7 m side lights and a transom up to 2.42 m, which stays under the porch soffit at 2.44. `door()` takes an optional `deco` that builds a decorated leaf. With `deco`, the leaf mesh is a thin glass pane and every added mesh is tagged as clickable.
+- **Main entrance (x = 1.1, plan z 1.175–3.975, 2.8 m in total):** a dark-aluminium and smoked-glass double door with gold leading (`goldGrid`), corner ornaments (`cornerOrn`) and long gold bar handles. It has fixed side lights `MAIN_SIDE` = 0.5 m each side of the 1.8 m leaf pair, and a transom `MAIN_TRANSOM` 0.45 over 2.25 m leaves, so the door is 2.7 m tall, level with the window tops. `door()` takes an optional `deco` that builds a decorated leaf. With `deco`, the leaf mesh is a thin glass pane and every added mesh is tagged as clickable.
 - **Window styles (by index in `WIN`):**
   - `AWNING`: the kitchen window, one top-hung sash.
-  - `TRIPLE`: the living room and P. thờ. Two side casements (28% each) with mullions, plus a top-hung middle sash.
+  - `QUAD`: the living room, 2.44 m wide (x 2.38–4.82). Four casements in two pairs either side of a centre mullion.
+  - `TRIPLE`: P. thờ. Two side casements (28% each) with mullions, plus a top-hung middle sash.
   - Every other window: two casements.
   - Every window is dark aluminium (`winFrame`) with blue-grey glass. Each sash has its own aluminium border from `sashFrame()`, and those meshes are part of the clickable leaf. Windows at least 1.1 m tall get a fixed 0.28 m transom light at the top.
   - `casement()` and `awning()` build the sashes. An awning is an outer group that turns local x along the wall, holding a pivot `Leaf` with `axis: 'x'`. The frame-loop `ease` rotates around `l.axis ?? 'y'`.
@@ -94,7 +95,7 @@ There is no build, no package manager and no tests. To run it, open the file in 
 - **Mouldings and colours:**
   - **Phào trên:** `band`, a 0.5 m strip under the eave soffit. **Phào dưới:** `plinth`, from the foundation to 0.45 m. Both are 4 cm proud of the outside walls and built with `wallWithHoles`, so they are cut around doors and windows.
   - **Colours:** `Layout.colors[key]` (keys in `COLOR_SPECS` in layout.ts, defaults from the client's reference photo), read via `PlanMap.color()`. They cover walls, both mouldings, roof tiles (ridge caps and finials derived darker), fascia, porch columns and window frames. Settings has a "Màu" tab.
-- **Eave heights:** all three roofs share one eave height (`E1 = E2 = E3 = 3.5`), so the white fascia, porch beam and top moulding run in one straight line from the front of the porch to the back, as in the reference photo. The porch columns go up to `PC = E3 - 0.62`, with the beams from `PC` to the soffit.
+- **Eave heights:** all three roofs share one eave height (`E1 = E2 = E3 = 3.9`, the client's 3.9 m wall height; walls run to `H` = 4.0 under the roof), so the white fascia, porch beam and top moulding run in one straight line from the front of the porch to the back, as in the reference photo. The porch columns go up to `PC = E3 - 0.62`, with the beams from `PC` to the soffit.
 - **Mirror (Cài đặt → Đảo ngược):** `Layout.mirror` flips the house front-to-back. `house.root` holds `scene` (the house, with `scale.z = -1` about `mirrorZ = mz(9) - 9`) plus the site meshes (ground, side path, boundary wall, ditch and their labels), which are moved out so they don't flip.
   - Every recorded world coordinate is flipped too: rects, seats (`face → π − face`), beds (head N ↔ S), window/wardrobe positions, rack position and clip planes.
   - `Door.mirror` makes `leafSegment` flip door segments. `setRoomMap`, `buildDimensions`, `setView` presets and `goHome` take `house.mirrorZ` into account.
@@ -106,6 +107,27 @@ There is no build, no package manager and no tests. To run it, open the file in 
   - **Sconces and porch light:** 4 wall sconces (porch columns, both sides of the thờ window) with an up/down wash and a real PointLight. The big porch light gets a PointLight.
   - **Switching:** `Game.applyLights()` switches `house.lights` (glows, bulb colours, point intensities) and the ambience (dim hemi/sun, dusk sky). It is re-applied after every rebuild. Washes are fake, so dozens of downlights stay cheap.
   - **Settings:** the "Đèn" tab edits the spacing.
+- **Opening sizes (client's figures):**
+  - **Windows:** 1.8 m tall, sill 0.9, top 2.7. The sash is 1.35 and the fixed transom (ô sáng) 0.45, from `tH` in house.ts. Exceptions keep their old heights: the WC windows (1.6–2.2), the kitchen awning window over the hob (0.9–1.7) and the window by the washing machine (1.1–2.0).
+  - **Bedroom windows:** 1.15 m wide. PN3 has no west window any more.
+  - **Bedroom doors:** 0.9 × 2.2 m, via `DoorSpec.h`.
+- **Bedrooms 1 and 2:**
+  - **Windows:** centred on the back wall.
+  - **PN1:** the bed's long side runs along the thờ wall and its head is on the z = 5 wall ('N'). The wardrobe sits in the north corner by PN2 (x 5.05–6.4). The desk is in the north-east corner beside the window. `desk(…, 'x')` can still put a desk on a wall running along z.
+  - **PN2:** the bed's head is on the east (PN1) wall.
+  - **`Bed.head`:** 'N' = z0, 'S' = z1, 'E' = x0, 'W' = x1. `lieDown()` handles all four. The mirror flips only N/S.
+- **WC block (x 10.82–13.8, z 6.3–8.8):**
+  - **Widths:** WC1 is 1.6 m between tiles (10.84–12.44) and WC2 is 1.2 m (12.58–13.78). The partition core is 12.46–12.56. Making room moved the PN2/WC wall to x 10.72–10.82, so PN2 is now 4.22 m.
+  - **WC1:** toilet by the door against the west wall; shower inside at the back, behind a glass screen at z 7.5.
+  - **WC2:** shower by the door; toilet on the back wall facing the door.
+  - **Keep in sync:** WALLS, the WC tile skins, floors, ROOM_DIMS, WALL_RIGID_X, rooms.ts and the room labels.
+  - **Axis:** the 2 cm minimum applies only to elastic segments, so two rigid spans 1 cm apart no longer grow the house.
+- **Flat roof + water tank over the WC block:**
+  - **Region:** the main hip roof is cut away where x > `FX` = mx(10.72) and z > `FZ` = mz(6.2), out to the eaves, using clip planes `flatPlanes` with `clipIntersection`. The planes are flipped by the mirror too.
+  - **Hidden parts:** `hip()` takes a cap material so its ridge caps are clipped as well. `roofAt` returns the eave height there, so walls stop under the slab.
+  - **Slab and walls:** a concrete slab at the eave line, a 0.3 m parapet on the outer edges, and white gable walls closing the cut faces of the hip.
+  - **Tank:** a horizontal 1500 L stainless tank (Φ1140 × L1750, 1.365 m on its stand) centred over the WCs.
+  - **Columns:** the structure grid adds columns at (10.77, 6.25) and (13.9, 6.25) so the slab sits on a framed bay.
 - **Structural frame (Kết cấu button):** `house.structure.group`, hidden by default and generated from the `WALLS` list in house.ts, so it follows room stretches and the mirror.
   - **Columns:** 220×220 on a frame grid with the usual 3.5–5 m spans (16 columns by default), not at every junction. The grid has the outside corners, the points where room walls meet the back wall (z = 8.9), and 2 cross frames through the open living room + kitchen: the middle one, nudged off the facade and middle-wall openings, and the bedroom-3 wall x = 10 carried on to the middle wall. Each frame has columns at both ends. The middle wall and thin partitions sit on beams. Spans over 5 m (edited) get an extra column, nudged out of `HOLES`. The only short span is 0.1→1.1 on z = 5 (thờ corner next to the porch corner). Each column has a 1.0 m pad footing at −1.6..−1.3. The middle wall (any 110 wall running along x) is flush with the front face of its columns (`colZ`), so the living room / kitchen / corridor side is flat. The column and the beams on that line shift ~55 mm towards the bedrooms and stick out ~110 mm only there (PN1, PN2, thờ). This is drawn as a pilaster (trụ áp tường) in the wall colour, from 0 up to the tie beam, solid for walking.
   - **Beams:** ground beams 220×400 at −0.7..−0.3 and tie beams at the eaves (E1−0.3..E1) along every wall line. The porch columns get footings, beams back to the house and a tie beam at PC.

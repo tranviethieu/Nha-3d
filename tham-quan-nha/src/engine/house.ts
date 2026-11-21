@@ -2,7 +2,7 @@
 // All helpers take PLAN coordinates in meters (house spans x 0..14, z 0..9);
 // they subtract (7, 4.5) so the house is centered on the world origin.
 import * as THREE from 'three';
-import { LIGHT_SPACING, PlanMap, emptyLayout, type Layout } from './layout';
+import { LIGHT_SPACING, MAIN_SIDE, MAIN_TRANSOM, PlanMap, emptyLayout, type Layout } from './layout';
 
 export type Dir = '+x' | '-x' | '+z' | '-z';
 /** Axis-aligned box in WORLD coordinates. */
@@ -14,8 +14,8 @@ export interface Door extends Leaf { open: boolean; len: number; /** set when th
 export interface Win { leaves: Leaf[]; open: boolean; x: number; z: number; /** cabinets: half-width of the front and display name */ half?: number; name?: string }
 /** Where the character sits: hip position (WORLD), facing yaw, seat height. */
 export interface Seat { x: number; z: number; face: number; top: number; kind: 'chair' | 'sofa' | 'desk' }
-/** Bed in WORLD coords; the headboard is on the z0 side ('N') or z1 side ('S'). */
-export interface Bed { x0: number; z0: number; x1: number; z1: number; head: 'N' | 'S'; top: number }
+/** Bed in WORLD coords; the headboard is on the z0 side ('N'), z1 side ('S'), x0 side ('E') or x1 side ('W'). */
+export interface Bed { x0: number; z0: number; x1: number; z1: number; head: 'N' | 'S' | 'E' | 'W'; top: number }
 export interface House {
   /** Obstacles spanning walking height (walls, furniture, closed glass). */
   solids: Rect[];
@@ -87,10 +87,10 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   /** true while building with coordinates that are already edited (no mapping in box()). */
   let noMap = false;
   const add = (o: THREE.Object3D) => (cur || scene).add(o);
-  const H = 3.6;
+  const H = 4.0; // walls run up under the roof; the eave line (wall height outside) is E1
   // eave heights: main roof, ancestor-room roof, porch roof. All equal (as in the client's reference photo) so the
   // white fascia and the mouldings run in one straight line from the front of the porch to the back.
-  const E1=3.5,E2=E1,E3=E1;
+  const E1=3.9,E2=E1,E3=E1; // wall height 3.9 m (client)
   const PC=E3-0.62; // porch column top / underside of the porch beam
   // Roof surface height over an EDITED plan point (the highest roof covering it, as rendered: the porch roof is
   // clipped over the house, the ancestor-room roof east of where it runs under the main roof); -Infinity if none.
@@ -99,12 +99,15 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   // Along the main roof's east edge, where the sub roofs run into it, the valleys between the roofs are open from
   // the side, so there stay under the LOWEST roof covering the point. Further in, the main roof hides everything:
   // stay under the highest (the porch roof's thin strip over the facade wall must not pull that wall down).
+  // Flat concrete roof (mái bằng) over the WC block, for the 1500 L water tank: the main hip roof is cut away for
+  // x > FX, z > FZ (edited plan coords) out to its eaves, and a slab sits there at the eave height.
+  const FX=mx(10.72),FZ=mz(6.2),inFlat=(x:number,z:number)=>x>FX&&z>FZ;
   const roofAt=(x:number,z:number)=>{let hi=-Infinity,lo=Infinity;
     for(const [r,E,k] of [[RF,E1,'main'],[RT,E2,'tho'],[RP,E3,'sanh']] as const){
       if(x<r.X0||x>r.X1||z<r.Z0||z>r.Z1)continue;
       if(k==='tho'&&x>thoCut)continue;
       if(k==='sanh'&&x>mx(1.0)&&z>mz(0.2))continue;
-      const h=E+Math.min(x-r.X0,z-r.Z0,r.Z1-z,k==='main'?r.X1-x:Infinity)*r.t;hi=Math.max(hi,h);lo=Math.min(lo,h);}
+      const h=k==='main'&&inFlat(x,z)?E:E+Math.min(x-r.X0,z-r.Z0,r.Z1-z,k==='main'?r.X1-x:Infinity)*r.t;hi=Math.max(hi,h);lo=Math.min(lo,h);}
     return x<RF.X0+0.6&&lo<Infinity?lo:hi;};
   /** A box (default plan coords) whose top is kept 3 cm under the roofs: where a roof is lower than y1 it is cut
    *  into short pieces, each as tall as the roof above it allows (east-end walls under the low sub roofs). */
@@ -181,18 +184,18 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   box(-0.8,0,0,4.95,-0.3,0,M(0xe2ddd4));
   box(-1.25,1.0,-0.8,4.0,-0.3,-0.15,stoneMat);
   box(-1.05,1.0,-0.8,4.0,-0.15,0,M(0xe8e4dc));
-  [[0,0,1.0,4.95,0xe7c3ae],[1.2,0.2,5.95,4.95,0xeeeae4],[5.95,0.2,9.95,4.95,0xe6dfd1],[10.05,4.05,13.8,4.95,0xe6dfd1],[10.05,0.2,13.8,3.95,0xc9a982],[0.2,5.05,2.55,8.8,0xd8c3a5],[2.65,5.05,6.4,8.8,0xc9a982],[6.5,5.05,10.85,8.8,0xc9a982],[10.95,5.05,13.8,6.2,0xdfe3e6],[10.95,6.3,12.325,8.8,0xd6dadd],[12.425,6.3,13.8,8.8,0xd6dadd]].forEach(f=>box(f[0],f[1],f[2],f[3],0,0.012,M(f[4]),false));
+  [[0,0,1.0,4.95,0xe7c3ae],[1.2,0.2,5.95,4.95,0xeeeae4],[5.95,0.2,9.95,4.95,0xe6dfd1],[10.05,4.05,13.8,4.95,0xe6dfd1],[10.05,0.2,13.8,3.95,0xc9a982],[0.2,5.05,2.55,8.8,0xd8c3a5],[2.65,5.05,6.4,8.8,0xc9a982],[6.5,5.05,10.72,8.8,0xc9a982],[10.82,5.05,13.8,6.2,0xdfe3e6],[10.82,6.3,12.46,8.8,0xd6dadd],[12.56,6.3,13.8,8.8,0xd6dadd]].forEach(f=>box(f[0],f[1],f[2],f[3],0,0.012,M(f[4]),false));
   box(2.2,1.3,5.0,3.0,0.012,0.02,M(0xd9d2c4),false);
   const showerTile=M(0x6c747c);
-  box(10.95,6.3,12.325,7.92,0.012,0.02,showerTile,false);box(12.425,6.3,13.8,7.92,0.012,0.02,showerTile,false);
+  box(10.84,7.5,12.44,8.78,0.012,0.02,showerTile,false);box(12.58,6.32,13.78,7.6,0.012,0.02,showerTile,false);
   // Window openings [x0,z0,x1,z1,y0,y1] (plan). The original drew glass over solid walls;
   // here walls are cut around them so the sashes can swing open.
   // openings hidden in Cài đặt → Cửa are simply not built: no hole, no leaf, the wall stays closed
   const WINS=map.windows.filter(w=>!w.hidden),WIN=WINS.map(w=>w.rect),DOORS=map.doors.filter(d=>!d.hidden);
   const hasDoor=(id:string)=>DOORS.some(d=>d.spec.id===id);
   // Door openings as wall holes (the lintel above each one is the wall left over). The main entrance hole also
-  // takes the transom (0.32 m above the leaves).
-  const doorHole=(d:typeof DOORS[number])=>{const top=d.spec.kind==='main'?d.h+0.32:d.h,[a0,a1]=d.span,c=d.spec.at;
+  // takes the transom (MAIN_TRANSOM above the leaves).
+  const doorHole=(d:typeof DOORS[number])=>{const top=d.spec.kind==='main'?d.h+MAIN_TRANSOM:d.h,[a0,a1]=d.span,c=d.spec.at;
     return d.spec.axis==='x'?[a0,c-0.13,a1,c+0.13,0,top]:[c-0.13,a0,c+0.13,a1,0,top];};
   const HOLES=[...WIN,...DOORS.map(doorHole)];
   /** A wall box split into pieces around any window opening that passes through it. */
@@ -208,10 +211,10 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     seg(cur,a1,y0,y1);}
   const wallMat=M(map.color('wall'));
   // WALLS (keep WALL_RIGID_X / Z in layout.ts in sync): continuous walls; doors and windows are cut out as holes
-  const WALLS=[[1.0,0,14,0.2],[1.0,0.2,1.2,4.95],[0,4.95,11.45,5.05],[13.2,4.95,14,5.05],[0,5.05,0.2,9],[0.2,8.8,13.8,9],[13.8,0,14,9],[9.95,0.2,10.05,3.95],[9.95,3.95,13.8,4.05],[2.55,5.05,2.65,8.8],[6.4,5.05,6.5,8.8],[10.85,5.05,10.95,8.8],[10.95,6.2,13.8,6.3],[12.325,6.3,12.425,8.8]];
+  const WALLS=[[1.0,0,14,0.2],[1.0,0.2,1.2,4.95],[0,4.95,11.45,5.05],[13.2,4.95,14,5.05],[0,5.05,0.2,9],[0.2,8.8,13.8,9],[13.8,0,14,9],[9.95,0.2,10.05,3.95],[9.95,3.95,13.8,4.05],[2.55,5.05,2.65,8.8],[6.4,5.05,6.5,8.8],[10.72,5.05,10.82,8.8],[10.82,6.2,13.8,6.3],[12.46,6.3,12.56,8.8]];
   WALLS.forEach(w=>wallWithHoles(w,0,H,wallMat,true));
   const wcTile=M(0xe9ecee);
-  [[10.95,6.3,10.97,8.8],[12.305,6.3,12.325,8.8],[12.425,6.3,12.445,8.8],[13.78,6.3,13.8,8.8],[10.97,6.3,12.305,6.32],[12.445,6.3,13.78,6.32],[10.97,8.78,12.305,8.8],[12.445,8.78,13.78,8.8]].forEach(w=>wallWithHoles(w,0,2.4,wcTile,false));
+  [[10.82,6.3,10.84,8.8],[12.44,6.3,12.46,8.8],[12.56,6.3,12.58,8.8],[13.78,6.3,13.8,8.8],[10.84,6.3,12.44,6.32],[12.58,6.3,13.78,6.32],[10.84,8.78,12.44,8.8],[12.58,8.78,13.78,8.8]].forEach(w=>wallWithHoles(w,0,2.4,wcTile,false));
   // Mouldings (as in the client's reference photo), 4 cm proud of the outside wall faces and cut around doors /
   // windows like the walls. Phào trên: a 0.5 m band right under the eave soffit (main roof; the ancestor wing sits
   // under its lower roof). Phào dưới: plinth from the foundation to 0.45 m, also on the porch-facing walls.
@@ -219,7 +222,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   [[1.0,-0.04,14.04,0],[14,0,14.04,9.04],[0.2,9,14.04,9.04]].forEach(w=>wallWithHoles(w,E1-0.76,E1-0.26,band,true));
   [[-0.04,4.95,0,9.04],[-0.04,9,0.2,9.04]].forEach(w=>wallWithHoles(w,E2-0.76,E2-0.26,band,true));
   [[0.96,-0.04,14.04,0],[14,0,14.04,9.04],[-0.04,9,14.04,9.04],[-0.04,4.91,0,9.04],[0.96,0.2,1.0,4.95],[0,4.91,1.0,4.95]].forEach(w=>wallWithHoles(w,-0.3,0.45,plinth,true));
-  box(-0.04,5.9,0,7.94,2.3,2.6,band,false);box(-0.04,5.9,0,7.94,0.35,0.85,band,false);
+  box(-0.04,5.9,0,7.94,0.35,0.85,band,false);
   const darkWood=new THREE.MeshStandardMaterial({color:0x4a2c1e,roughness:0.5});
   box(1.2,0.2,5.95,0.28,0,0.1,darkWood,false);box(1.2,4.87,5.95,4.95,0,0.1,darkWood,false);
   const colMat=M(map.color('column'));
@@ -239,8 +242,9 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   const sashFrame=(gr:THREE.Object3D,x0:number,x1:number,y0:number,y1:number,win:Win)=>{const sb=0.04,D=0.045;
     for(const [w,h,x,y] of [[sb,y1-y0,x0+sb/2,(y0+y1)/2],[sb,y1-y0,x1-sb/2,(y0+y1)/2],[x1-x0,sb,(x0+x1)/2,y1-sb/2],[x1-x0,sb,(x0+x1)/2,y0+sb/2]]){
       const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,D),winFrame);m.position.set(x,y,0);gr.add(m);m.userData.win=win;winLeaves.push(m);}};
-  // Window styles (indices into WIN): the kitchen window is one top-hung (awning) sash; the living-room and
-  // ancestor-room windows have three sashes — two side casements and a top-hung middle one. Others: two casements.
+  // Window styles (indices into WIN): the kitchen window is one top-hung (awning) sash; the living-room window has
+  // four casements (2.44 m); the ancestor-room window has three sashes — two side casements and a top-hung middle
+  // one. Others: two casements.
   WIN.forEach((g,wi)=>{
     const alongX=(g[2]-g[0])>(g[3]-g[1]),cx=(g[0]+g[2])/2,cz=(g[1]+g[3])/2,fw=0.05;
     const out:Dir=alongX?(cz<4.5?'-z':'+z'):(cx<7?'-x':'+x');
@@ -250,8 +254,8 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const A0=alongX?g[0]:g[1],A1=alongX?g[2]:g[3];
     fr(A0,A0+fw,g[4],g[5]);fr(A1-fw,A1,g[4],g[5]);fr(A0,A1,g[5]-fw,g[5]);fr(A0,A1,g[4],g[4]+fw);
     box(g[0]-0.05,g[1]-0.03,g[2]+0.05,g[3]+0.03,g[4]-0.05,g[4],colMat,false);
-    // fixed transom on windows at least 1.1 m tall
-    const tH=g[5]-g[4]>=1.1?0.28:0,yb=g[4]+fw,yt=tH?g[5]-fw-tH-fw:g[5]-fw,h=yt-yb;
+    // fixed transom (ô sáng): 0.45 m on the 1.8 m windows (sash 1.35 m), 0.28 m on windows 1.1–1.6 m tall
+    const tH=g[5]-g[4]>=1.6?0.45-2*fw:g[5]-g[4]>=1.1?0.28:0,yb=g[4]+fw,yt=tH?g[5]-fw-tH-fw:g[5]-fw,h=yt-yb;
     if(tH){fr(A0,A1,yt,yt+fw);
       if(alongX)box(A0+fw,face-0.01,A1-fw,face+0.01,yt+fw,g[5]-fw,glass,false);else box(face-0.01,A0+fw,face+0.01,A1-fw,yt+fw,g[5]-fw,glass,false);}
     const win:Win={leaves:[],open:false,x:mx(cx)-7,z:mz(cz)-4.5};
@@ -279,11 +283,15 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
       const sw=(A1-A0-4*fw)*0.28; // side sashes; the middle one gets the rest
       fr(A0+fw+sw,A0+2*fw+sw,yb,yt);fr(A1-2*fw-sw,A1-fw-sw,yb,yt); // mullions
       casement(A0+fw,P,sw);casement(A1-fw,N,sw);awning(A0+2*fw+sw,A1-2*fw-sw);
+    }else if(style==='quad'){
+      // four side-hung sashes, two pairs either side of a centre mullion (each pair meets at a quarter point)
+      const len=(A1-A0-3*fw)/4,am=(A0+A1)/2;fr(am-fw/2,am+fw/2,yb,yt);
+      casement(A0+fw,P,len);casement(am-fw/2,N,len);casement(am+fw/2,P,len);casement(A1-fw,N,len);
     }else{const len=(A1-A0-2*fw)/2;casement(A0+fw,P,len);casement(A1-fw,N,len);}
     windows.push(win);});
   const mainWood=M(0x7a3a22),inWood=M(0x5a3322),wcDoor=M(0xdcdcdc);
   const stepMat=M(0xbdb6aa);
-  if(hasDoor('d-bep'))box(5.9,-0.42,7.0,0,-0.3,-0.15,stepMat);if(hasDoor('d-hong'))box(14,3.95,14.42,5.05,-0.3,-0.15,stepMat); // steps outside the side doors
+  if(hasDoor('d-hong'))box(14,3.95,14.42,5.05,-0.3,-0.15,stepMat); // step outside the side door
   const vz0=1.05,vz1=3.55,vh=2.8,bay=(vz1-vz0-0.2)/8;
   let tvScreen!:THREE.Mesh; // living-room TV screen (faces -x); Game shows YouTube through it
   obj('vachTivi','Vách tivi + kệ tivi','Phòng khách',true,()=>{
@@ -356,50 +364,57 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   armL=box(9.7,1.09,9.75,1.11,1.6,2.0,rackMat,false);armR=box(9.7,2.14,9.75,2.16,1.6,2.0,rackMat,false);});
   obj('tuLanh','Tủ lạnh','Bếp + ăn',true,()=>box(9.25,2.76,9.95,3.46,0,1.8,steel));
   obj('tuXanh','Tủ nhỏ màu xanh','Bếp + ăn',true,()=>box(7.32,0.2,7.82,0.7,0,1.1,blue));
-  obj('lavabo','Bàn lavabo đôi + gương','Lavabo',true,()=>{box(10.95,5.12,11.45,6.08,0.18,0.82,M(0x6b4430));box(10.95,5.12,10.96,6.08,0,0.18,M(0x3a2a20),false);
-  box(10.95,5.1,11.5,6.1,0.82,0.86,M(0xf1efea));
-  [5.36,5.84].forEach(z=>{cyl(11.24,0.92,z,0.17,0.13,0.12,ceramic);cyl(11.24,0.975,z,0.15,0.15,0.005,M(0xdfe6ea));
-  cyl(11.02,1.02,z,0.014,0.018,0.32,chrome);box(11.02,z-0.012,11.16,z+0.012,1.16,1.18,chrome,false);});
+  obj('lavabo','Bàn lavabo đôi + gương','Lavabo',true,()=>{box(10.82,5.12,11.32,6.08,0.18,0.82,M(0x6b4430));box(10.82,5.12,10.83,6.08,0,0.18,M(0x3a2a20),false);
+  box(10.82,5.1,11.37,6.1,0.82,0.86,M(0xf1efea));
+  [5.36,5.84].forEach(z=>{cyl(11.11,0.92,z,0.17,0.13,0.12,ceramic);cyl(11.11,0.975,z,0.15,0.15,0.005,M(0xdfe6ea));
+  cyl(10.89,1.02,z,0.014,0.018,0.32,chrome);box(10.89,z-0.012,11.03,z+0.012,1.16,1.18,chrome,false);});
   const mirror=new THREE.MeshStandardMaterial({color:0xcfdbe3,roughness:0.05,metalness:0.85});
-  box(10.95,5.15,10.975,6.05,1.15,1.85,mirror);box(10.95,5.2,11.0,6.0,1.87,1.9,new THREE.MeshBasicMaterial({color:0xfff3d6}),false);});
+  box(10.82,5.15,10.845,6.05,1.15,1.85,mirror);box(10.82,5.2,10.87,6.0,1.87,1.9,new THREE.MeshBasicMaterial({color:0xfff3d6}),false);});
   function shower(xw:number,z:number){cyl(xw+0.05,1.5,z,0.016,0.016,1.2,chrome);
   box(xw+0.05,z-0.012,xw+0.33,z+0.012,2.09,2.11,chrome,false);cyl(xw+0.33,2.07,z,0.13,0.13,0.02,chrome);
   box(xw,z-0.09,xw+0.07,z+0.09,0.95,1.1,chrome,false);
   cyl(xw+0.08,1.25,z+0.09,0.025,0.018,0.22,chrome);
   box(xw+0.4,z-0.06,xw+0.52,z+0.06,0.021,0.025,M(0x9aa1a8),false);}
-  function bed(x0:number,z0:number,x1:number,z1:number,head:'N'|'S'){beds.push({x0:x0-7,z0:z0-4.5,x1:x1-7,z1:z1-4.5,head,top:0.55});box(x0,z0,x1,z1,0,0.45,white);box(x0+0.02,z0+0.02,x1-0.02,z1-0.02,0.45,0.55,blanket);
-  if(head==='N')box(x0,z0,x1,z0+0.1,0,1.0,wood);if(head==='S')box(x0,z1-0.1,x1,z1,0,1.0,wood);}
-  /** 1 m study desk against the wall at z = zw (s = +1: wall on the +z side), under a bedroom window: top,
-   *  side panel, 3-drawer pedestal, lamp and books, plus a chair (a seat facing the desk). */
+  function bed(x0:number,z0:number,x1:number,z1:number,head:Bed['head']){beds.push({x0:x0-7,z0:z0-4.5,x1:x1-7,z1:z1-4.5,head,top:0.55});box(x0,z0,x1,z1,0,0.45,white);box(x0+0.02,z0+0.02,x1-0.02,z1-0.02,0.45,0.55,blanket);
+  if(head==='N')box(x0,z0,x1,z0+0.1,0,1.0,wood);if(head==='S')box(x0,z1-0.1,x1,z1,0,1.0,wood);if(head==='E')box(x0,z0,x0+0.1,z1,0,1.0,wood);if(head==='W')box(x1-0.1,z0,x1,z1,0,1.0,wood);}
+  /** 1 m study desk against a wall: top, side panel, 3-drawer pedestal, lamp and books, plus a chair (a seat
+   *  facing the desk). Spans [x0, x1] along the wall. The wall runs along x at z = zw (s = +1: wall on the +z side),
+   *  or with axis 'x' along z at x = zw (x0/x1 are then z values, s = +1: wall on the +x side). */
   const deskTop=M(0xd9c3a0),deskBody=M(0xf2efe9),chairSeat=M(0x34495e);
-  function desk(x0:number,x1:number,zw:number,s:number){
+  function desk(x0:number,x1:number,zw:number,s:number,axis:'z'|'x'='z'){
+    // u = along the wall, v = across it
+    const B=(u0:number,v0:number,u1:number,v1:number,y0:number,y1:number,m:THREE.MeshStandardMaterial,e=true)=>axis==='z'?box(u0,v0,u1,v1,y0,y1,m,e):box(v0,u0,v1,u1,y0,y1,m,e);
+    const Cy=(u:number,y:number,v:number,r1:number,r2:number,h:number,m:THREE.Material,tilt?:number)=>axis==='z'?cyl(u,y,v,r1,r2,h,m,tilt):cyl(v,y,u,r1,r2,h,m,undefined,tilt===undefined?undefined:-tilt);
     const D=0.55,zf=zw-s*D;
-    box(x0,zw,x1,zf,0.72,0.75,deskTop);box(x0,zw,x0+0.03,zf,0,0.72,deskBody);box(x0,zw,x1,zw-s*0.02,0.3,0.72,deskBody,false);
-    box(x1-0.4,zw,x1,zf+s*0.015,0,0.72,deskBody);
-    for(let i=0;i<3;i++){const y=0.04+i*0.225;box(x1-0.39,zf+s*0.015,x1-0.01,zf,y,y+0.215,deskBody);box(x1-0.24,zf,x1-0.16,zf-s*0.02,y+0.15,y+0.165,chrome,false);}
+    B(x0,zw,x1,zf,0.72,0.75,deskTop);B(x0,zw,x0+0.03,zf,0,0.72,deskBody);B(x0,zw,x1,zw-s*0.02,0.3,0.72,deskBody,false);
+    B(x1-0.4,zw,x1,zf+s*0.015,0,0.72,deskBody);
+    for(let i=0;i<3;i++){const y=0.04+i*0.225;B(x1-0.39,zf+s*0.015,x1-0.01,zf,y,y+0.215,deskBody);B(x1-0.24,zf,x1-0.16,zf-s*0.02,y+0.15,y+0.165,chrome,false);}
     // lamp (base, stem, shade, bulb) and a few books
     const lx=x0+0.13,lz=zw-s*0.13;
-    cyl(lx,0.76,lz,0.06,0.07,0.02,steel);cyl(lx,0.95,lz,0.008,0.008,0.38,steel);
-    cyl(lx,1.12,lz-s*0.08,0.025,0.075,0.1,M(0x2f6f6a),0.45*s);cyl(lx,1.1,lz-s*0.09,0.02,0.02,0.02,new THREE.MeshBasicMaterial({color:0xfff2cc}));
-    [0x8e3b3b,0x3b5f8e,0xd9a441,0x4f8a5b].forEach((c,i)=>{const bx=x1-0.32+i*0.035;box(bx,zw-s*0.04,bx+0.03,zw-s*0.24,0.75,0.97-(i%2)*0.04,M(c),false);});
+    Cy(lx,0.76,lz,0.06,0.07,0.02,steel);Cy(lx,0.95,lz,0.008,0.008,0.38,steel);
+    Cy(lx,1.12,lz-s*0.08,0.025,0.075,0.1,M(0x2f6f6a),0.45*s);Cy(lx,1.1,lz-s*0.09,0.02,0.02,0.02,new THREE.MeshBasicMaterial({color:0xfff2cc}));
+    [0x8e3b3b,0x3b5f8e,0xd9a441,0x4f8a5b].forEach((c,i)=>{const bx=x1-0.32+i*0.035;B(bx,zw-s*0.04,bx+0.03,zw-s*0.24,0.75,0.97-(i%2)*0.04,M(c),false);});
     // chair pulled out in front of the knee space, backrest away from the desk
     const cx=(x0+0.03+x1-0.4)/2,zc=zf-s*0.32;
-    box(cx-0.21,zc-0.21,cx+0.21,zc+0.21,0.4,0.46,chairSeat);
-    box(cx-0.2,zc-s*0.21,cx+0.2,zc-s*0.17,0.46,0.92,chairSeat);
-    for(const [dx,dz] of [[-0.18,-0.18],[0.18,-0.18],[-0.18,0.18],[0.18,0.18]])cyl(cx+dx,0.2,zc+dz,0.012,0.012,0.4,chrome);
-    seat(cx,zc-s*0.09,s>0?0:Math.PI,0.46,'desk');}
-  obj('banHoc1','Bàn học + ghế','Phòng ngủ 1',true,()=>desk(5.38,6.38,8.8,1));
-  obj('banHoc2','Bàn học + ghế','Phòng ngủ 2',true,()=>desk(9.7,10.7,8.8,1));
+    B(cx-0.21,zc-0.21,cx+0.21,zc+0.21,0.4,0.46,chairSeat);
+    B(cx-0.2,zc-s*0.21,cx+0.2,zc-s*0.17,0.46,0.92,chairSeat);
+    for(const [dx,dz] of [[-0.18,-0.18],[0.18,-0.18],[-0.18,0.18],[0.18,0.18]])Cy(cx+dx,0.2,zc+dz,0.012,0.012,0.4,chrome);
+    if(axis==='z')seat(cx,zc-s*0.09,s>0?0:Math.PI,0.46,'desk');else seat(zc-s*0.09,cx,s>0?Math.PI/2:-Math.PI/2,0.46,'desk');}
+  obj('banHoc1','Bàn học + ghế','Phòng ngủ 1',true,()=>desk(2.65,3.65,8.8,1));                 // north-east corner, beside the window
+  obj('banHoc2','Bàn học + ghế','Phòng ngủ 2',true,()=>desk(9.4,10.4,8.8,1));
   obj('banHoc3','Bàn học + ghế','Phòng ngủ 3',true,()=>desk(10.06,11.06,0.2,-1));
   obj('giuong3','Giường + 2 tab đầu giường','Phòng ngủ 3',true,()=>{bed(11.55,0.2,13.35,2.2,'N');box(11.1,0.2,11.55,0.65,0,0.5,wood);box(13.35,0.2,13.8,0.65,0,0.5,wood);});
-  obj('giuong1','Giường + 2 tab đầu giường','Phòng ngủ 1',true,()=>{bed(3.1,6.8,4.9,8.8,'S');box(2.65,8.35,3.1,8.8,0,0.5,wood);box(4.9,8.35,5.35,8.8,0,0.5,wood);});
-  obj('giuong2','Giường + 2 tab đầu giường','Phòng ngủ 2',true,()=>{bed(6.95,6.8,8.75,8.8,'S');box(6.5,8.35,6.95,8.8,0,0.5,wood);box(8.75,8.35,9.2,8.8,0,0.5,wood);});
+  obj('giuong1','Giường + 2 tab đầu giường','Phòng ngủ 1',true,()=>{bed(2.65,5.05,4.45,7.05,'N');box(4.45,5.05,4.9,5.5,0,0.5,wood);}); // head to the south wall, along the thờ wall
+  obj('giuong2','Giường + 2 tab đầu giường','Phòng ngủ 2',true,()=>{bed(6.5,6.55,8.5,8.35,'E');box(6.5,8.35,6.95,8.8,0,0.5,wood);}); // head to the east (PN1) wall
   obj('banTho','Bàn thờ','Phòng thờ',true,()=>box(1.59,5.96,2.55,7.88,0,1.2,altar));
   obj('mayGiat','Máy giặt','Lavabo',true,()=>{box(13.2,5.16,13.8,5.76,0,0.85,white);cyl(13.5,0.6,5.46,0.17,0.17,0.02,M(0x9aa1a8),Math.PI/2*0,Math.PI/2);});
   const glassP=new THREE.MeshStandardMaterial({color:0xbfe3f7,transparent:true,opacity:0.35});
-  ([['WC1',10.97],['WC2',12.445]] as [string,number][]).forEach(([wc,x],i)=>{
-    obj('sen'+(i+1),'Sen cây + vách kính','WC'+(i+1),true,()=>{shower(x,7.3);box(x,6.6,x+0.15,7.0,1.0,1.02,chrome,false);box(x,7.92,x+0.85,7.98,0,2.0,glassP);});
-    obj('bonCau'+(i+1),'Bồn cầu',wc,true,()=>{box(x,8.2,x+0.18,8.62,0,0.8,ceramic);const b=cyl(x+0.42,0.2,8.41,0.19,0.16,0.4,ceramic);b.scale.set(1.3,1,1);});});
+  // WC1 (1.6 m wide): toilet by the door against the west wall, facing the door side; shower inside at the
+  // back behind a glass screen. WC2 (1.2 m wide): shower by the door, toilet on the back wall facing the door.
+  obj('sen1','Sen cây + vách kính','WC1',true,()=>{shower(10.84,8.25);box(10.84,7.75,10.99,8.0,1.0,1.02,chrome,false);box(10.84,7.47,11.84,7.53,0,2.0,glassP);});
+  obj('bonCau1','Bồn cầu','WC1',true,()=>{box(10.84,6.64,11.02,7.06,0,0.8,ceramic);const b=cyl(11.26,0.2,6.85,0.19,0.16,0.4,ceramic);b.scale.set(1.3,1,1);});
+  obj('sen2','Sen cây + vách kính','WC2',true,()=>{shower(12.58,6.95);box(12.58,7.15,12.73,7.4,1.0,1.02,chrome,false);box(12.58,7.57,13.18,7.63,0,2.0,glassP);});
+  obj('bonCau2','Bồn cầu','WC2',true,()=>{box(12.97,8.6,13.39,8.78,0,0.8,ceramic);const b=cyl(13.18,0.2,8.36,0.19,0.16,0.4,ceramic);b.scale.set(1,1,1.3);});
   const doors:Door[]=[],clickables:THREE.Object3D[]=[];
   rackParts.forEach(p=>{p.userData.rack=true;clickables.push(p);});
   const ang:Record<Dir,number>={'+x':0,'-x':Math.PI,'+z':-Math.PI/2,'-z':Math.PI/2};
@@ -455,8 +470,8 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const mat=sp.kind==='outer'?mainWood:sp.kind==='wc'?wcDoor:inWood;
     doorById[sp.id]=door(h0,h1,d.w,sp.cd,sp.od,mat,undefined,d.h);}
   const md=DOORS.find(d=>d.spec.kind==='main');
-  if(md){// fixed side lights (0.7 m each side of the leaves) and the transom over all three bays; local x runs along +z
-    const W=md.span[1]-md.span[0],L0=0.7,L1=W-0.7,C=W/2,T0=md.h+0.02,T1=md.h+0.32;
+  if(md){// fixed side lights (MAIN_SIDE each side of the leaves) and the transom over all three bays; local x runs along +z
+    const W=md.span[1]-md.span[0],L0=MAIN_SIDE,L1=W-MAIN_SIDE,C=W/2,T0=md.h+0.02,T1=md.h+MAIN_TRANSOM;
     const fx=new THREE.Group();fx.position.set(mx(md.spec.at)-7,0,mz(md.span[0])-4.5);fx.rotation.y=-Math.PI/2;scene.add(fx);
     const o:THREE.Mesh[]=[];
     const bar=(x0:number,x1:number,y0:number,y1:number)=>lm(fx,new THREE.BoxGeometry(x1-x0,y1-y0,0.07),alu,(x0+x1)/2,(y0+y1)/2);
@@ -466,7 +481,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
       goldGrid(fx,a+0.06,0.12,b-0.06,T0,6,o);
       cornerOrn(fx,a+0.06,T0,1,-1,0.09,o);cornerOrn(fx,b-0.06,T0,-1,-1,0.09,o);
       solids.push({x0:mx(md.spec.at-0.06)-7,x1:mx(md.spec.at+0.06)-7,z0:mz(md.span[0]+a)-4.5,z1:mz(md.span[0]+b)-4.5,y0:0,y1:T0});}
-    bar(0,W,2.1,T0+0.06);bar(0,W,T1-0.05,T1);
+    bar(0,W,md.h,T0+0.06);bar(0,W,T1-0.05,T1);
     for(const x of [0,L0,C,L1,W])bar(Math.max(0,x-0.03),Math.min(W,x+0.03),T0,T1);
     lm(fx,new THREE.BoxGeometry(W,T1-T0-0.1,0.02),tint,W/2,(T0+0.06+T1-0.05)/2);
     for(const [a,b] of [[0,L0],[L0,C],[C,L1],[L1,W]]){const ym=(T0+0.06+T1-0.05)/2,c=(a+b)/2;
@@ -500,7 +515,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
       gr.rotation.y=c;w.leaves.push({g:gr,c,o:c+d*0.95,t:c});m.userData.win=w;kn.userData.win=w;clickables.push(m,kn);add(gr);}
     wardrobes.push(w);}
   obj('tuAo3','Tủ quần áo','Phòng ngủ 3',false,()=>wardrobe(11.8,3.15,13.8,3.95,'-z'));
-  obj('tuAo1','Tủ quần áo','Phòng ngủ 1',false,()=>wardrobe(2.65,5.05,4.65,5.85,'+z'));
+  obj('tuAo1','Tủ quần áo','Phòng ngủ 1',false,()=>wardrobe(5.15,8.0,6.4,8.8,'-z'));     // north corner by PN2
   obj('tuAo2','Tủ quần áo','Phòng ngủ 2',false,()=>wardrobe(6.5,5.05,8.5,5.85,'+z'));
   /** Wine cabinet in the living-room corner, in line with the TV unit: same depth, as tall as the partition (vh),
    *  front facing the living room (-x) like the TV wall. Built in local coords u (along the front, from the facade
@@ -551,8 +566,8 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   const labels:THREE.Sprite[]=[];
   function label(t:string,x:number,z:number){const c=document.createElement('canvas');c.width=320;c.height=72;const g=c.getContext('2d')!;g.fillStyle='rgba(255,255,255,0.88)';g.beginPath();if(g.roundRect)g.roundRect(4,8,312,56,14);else g.rect(4,8,312,56);g.fill();g.fillStyle='#2c2c2a';g.font='500 30px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText(t,160,37);
   const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;
-  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false}));s.scale.set(2.2,0.5,1);s.position.set(mx(x)-7,4.0,mz(z)-4.5);s.renderOrder=10;s.visible=false;scene.add(s);labels.push(s);return s;}
-  ([['Sảnh',-0.2,2.5],['Phòng khách',3.6,2.8],['Bếp + ăn',8.0,3.9],['P. ngủ 3',11.9,2.7],['Hành lang',12.0,4.5],['P. thờ',1.4,7.0],['P. ngủ 1',4.5,6.3],['P. ngủ 2',8.6,6.3],['Lavabo',12.4,5.6],['WC1',11.6,7.3],['WC2',13.1,7.3],] as [string,number,number][]).forEach(l=>label(l[0],l[1],l[2]));
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false}));s.scale.set(2.2,0.5,1);s.position.set(mx(x)-7,E1+0.5,mz(z)-4.5);s.renderOrder=10;s.visible=false;scene.add(s);labels.push(s);return s;}
+  ([['Sảnh',-0.2,2.5],['Phòng khách',3.6,2.8],['Bếp + ăn',8.0,3.9],['P. ngủ 3',11.9,2.7],['Hành lang',12.0,4.5],['P. thờ',1.4,7.0],['P. ngủ 1',4.5,6.3],['P. ngủ 2',8.55,6.3],['Lavabo',12.4,5.6],['WC1',11.64,7.3],['WC2',13.18,7.3],] as [string,number,number][]).forEach(l=>label(l[0],l[1],l[2]));
   const siteLabels=[label('Lối đi',7.6,-0.75),label('Mương',7.6,-2.55)];
   const roofG=new THREE.Group();scene.add(roofG);
   const roofCol=new THREE.Color(map.color('roof'));
@@ -562,20 +577,23 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   const roofMatS=roofMat.clone();roofMatS.clippingPlanes=cutPlanes;roofMatS.clipIntersection=true;
   const roofLineS=roofLine.clone();roofLineS.clippingPlanes=cutPlanes;roofLineS.clipIntersection=true;
   const capMat=M(roofCol.clone().multiplyScalar(0.72).getHex()); // ridge caps a shade darker than the tiles
-  function cap(a:number[],b:number[]){const A=new THREE.Vector3(a[0],a[1]+0.05,a[2]),B=new THREE.Vector3(b[0],b[1]+0.05,b[2]);const len=A.distanceTo(B);
-  const c=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,len,8),capMat);c.position.copy(A).add(B).multiplyScalar(0.5);
+  function cap(a:number[],b:number[],cm:THREE.Material=capMat){const A=new THREE.Vector3(a[0],a[1]+0.05,a[2]),B=new THREE.Vector3(b[0],b[1]+0.05,b[2]);const len=A.distanceTo(B);
+  const c=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,len,8),cm);c.position.copy(A).add(B).multiplyScalar(0.5);
   c.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),B.clone().sub(A).normalize());roofG.add(c);}
   /** capTo: stop the ridge cap at this plan x (where the ridge disappears under the main roof). */
-  function hip(x0:number,x1:number,z0:number,z1:number,hl:boolean,hr:boolean,E:number,t:number,mat?:THREE.Material,lmat?:THREE.LineBasicMaterial,capTo=Infinity){const zm=(z0+z1)/2,half=(z1-z0)/2,r=E+half*t,L=hl?x0+half:x0,R=hr?x1-half:x1;
+  function hip(x0:number,x1:number,z0:number,z1:number,hl:boolean,hr:boolean,E:number,t:number,mat?:THREE.Material,lmat?:THREE.LineBasicMaterial,capTo=Infinity,cm:THREE.Material=capMat){const zm=(z0+z1)/2,half=(z1-z0)/2,r=E+half*t,L=hl?x0+half:x0,R=hr?x1-half:x1;
   const P=(x:number,y:number,z:number)=>[x-7,y,z-4.5];
   const tri:number[]=[];const q=(a:number[],b:number[],c:number[])=>tri.push(...a,...b,...c);
   const A=P(x0,E,z0),B=P(x1,E,z0),C=P(x1,E,z1),D=P(x0,E,z1),RL=P(L,r,zm),RR=P(R,r,zm);
   q(A,B,RR);q(A,RR,RL);q(D,RL,RR);q(D,RR,C);q(A,RL,D);q(B,C,RR);
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(tri,3));g.computeVertexNormals();
   roofG.add(new THREE.Mesh(g,mat||roofMat));roofG.add(new THREE.LineSegments(new THREE.EdgesGeometry(g,20),lmat||roofLine));
-  cap(RL,capTo<R?P(Math.max(L,capTo),r,zm):RR);if(hl){cap(A,RL);cap(D,RL);}if(hr){cap(B,RR);cap(C,RR);}
+  cap(RL,capTo<R?P(Math.max(L,capTo),r,zm):RR,cm);if(hl){cap(A,RL,cm);cap(D,RL,cm);}if(hr){cap(B,RR,cm);cap(C,RR,cm);}
   return {L,R,r,zm};}
-  const main=hip(RF.X0,RF.X1,RF.Z0,RF.Z1,true,true,E1,RF.t);
+  // main roof minus the flat-roof corner (clipped where x > FX and z > FZ)
+  const flatPlanes=[new THREE.Plane(new THREE.Vector3(-1,0,0),FX-7),new THREE.Plane(new THREE.Vector3(0,0,-1),FZ-4.5)];
+  const clipF=<T extends THREE.Material>(m:T)=>{const c=m.clone() as T;c.clippingPlanes=flatPlanes;c.clipIntersection=true;return c;};
+  const main=hip(RF.X0,RF.X1,RF.Z0,RF.Z1,true,true,E1,RF.t,clipF(roofMat),clipF(roofLine),Infinity,clipF(capMat));
   // The ancestor-room roof runs into the main roof; clip it (and stop its ridge cap) where its ridge goes under
   // the main roof's east face, otherwise a steeper / higher one shows through.
   const thoPlanes=[new THREE.Plane(new THREE.Vector3(-1,0,0),thoCut-7)];
@@ -589,6 +607,32 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const {X0,X1,Z0,Z1}=RF,hz0=mz(0),hz1=mz(9),hx1=mx(14);noMap=true;
     fb(X0,Z0-0.06,X1,Z0,E1);fb(X0,Z1,X1,Z1+0.06,E1);fb(X1,Z0,X1+0.06,Z1,E1);fb(X0-0.06,Z0,X0,mz(-0.3),E1);fb(X0-0.06,mz(9.4),X0,Z1,E1);
     sf(X0,Z0,X1,hz0,E1);sf(X0,hz1,X1,Z1,E1);sf(hx1,Z0,X1,Z1,E1);noMap=false;}
+  {// ---- flat roof over the WC block + 1500 L stainless water tank (horizontal, Φ1140 x L1750, on its stand) ----
+    noMap=true;const X1=RF.X1,Z1=RF.Z1,slab=M(0xbdbab3),wallC=M(map.color('wall'));
+    box(FX,FZ,X1,Z1,E1-0.12,E1,slab,true,null,roofG);                                   // slab, top at the eave line
+    box(FX,Z1-0.1,X1,Z1,E1,E1+0.3,wallC,true,null,roofG);box(X1-0.1,FZ,X1,Z1-0.1,E1,E1+0.3,wallC,true,null,roofG); // low parapet
+    // close the cut faces of the hip roof (a white gable wall along x = FX and z = FZ, up to the roof surface)
+    const hR=(x:number,z:number)=>E1+Math.max(0,Math.min(x-RF.X0,z-RF.Z0,RF.Z1-z,RF.X1-x))*RF.t;
+    const gable=(alongZ:boolean)=>{const a0=alongZ?FZ:FX,a1=alongZ?Z1:X1,n=40,pos:number[]=[];
+      for(let i=0;i<n;i++){const p=a0+(a1-a0)*i/n,q=a0+(a1-a0)*(i+1)/n,hp=alongZ?hR(FX,p):hR(p,FZ),hq=alongZ?hR(FX,q):hR(q,FZ);
+        const v=(a:number,y:number)=>alongZ?[FX-7,y,a-4.5]:[a-7,y,FZ-4.5];
+        pos.push(...v(p,E1),...v(q,E1),...v(q,hq),...v(p,E1),...v(q,hq),...v(p,hp));}
+      const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.computeVertexNormals();
+      roofG.add(new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:map.color('wall'),roughness:0.85,side:THREE.DoubleSide})));};
+    gable(true);gable(false);
+    // the tank, centred over the WC block, lying along x
+    const tx=(mx(10.82)+mx(13.8))/2-7,tz=(mz(6.3)+mz(8.8))/2-4.5,R=0.57,TL=1.75,cy=E1+1.365-R;
+    const inox=new THREE.MeshStandardMaterial({color:0xe8ebee,roughness:0.3,metalness:0.35}); // no env map: keep it light
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(R,R,TL,32),inox);body.rotation.z=Math.PI/2;body.position.set(tx,cy,tz);roofG.add(body);
+    for(const sx of [-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(R,32,16,0,Math.PI*2,0,Math.PI/2),inox);e.scale.set(1,0.18,1);
+      e.rotation.z=-sx*Math.PI/2;e.position.set(tx+sx*TL/2,cy,tz);roofG.add(e);
+      for(const b of [-0.5,0.5]){const r=new THREE.Mesh(new THREE.TorusGeometry(R+0.005,0.012,6,40),inox);r.rotation.y=Math.PI/2;r.position.set(tx+sx*TL*0.33+b*0.05,cy,tz);roofG.add(r);}}
+    const lid=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.08,24),inox);lid.position.set(tx,cy+R+0.02,tz);roofG.add(lid);
+    const stand=M(0x8d9399);
+    for(const sx of [-0.6,0,0.6]){box(tx+sx-0.04+7,tz-0.61+4.5,tx+sx+0.04+7,tz+0.61+4.5,E1,E1+0.24,stand,true,null,roofG);}
+    box(tx-0.9+7,tz-0.61+4.5,tx+0.9+7,tz-0.55+4.5,E1+0.18,E1+0.24,stand,false,null,roofG);box(tx-0.9+7,tz+0.55+4.5,tx+0.9+7,tz+0.61+4.5,E1+0.18,E1+0.24,stand,false,null,roofG);
+    const pipe=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,cy-R-E1+0.05,10),M(0xe9e9e9));pipe.position.set(tx+0.4,(cy-R+E1)/2,tz);roofG.add(pipe);
+    noMap=false;}
   {// sub-roof fascia + soffits (porch ceiling), in edited coords like the main roof's
     const wx=mx(1.0),hz0=mz(0),hz9=mz(4.95);noMap=true;
     fb(RT.X0-0.06,RT.Z0,RT.X0,RT.Z1,E2);fb(RT.X0,RT.Z1,0.2,RT.Z1+0.06,E2);if(RP.Z1<=RT.Z0)fb(RT.X0,RT.Z0-0.06,0,RT.Z0,E2); // hidden under the porch roof where they overlap
@@ -680,9 +724,9 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     // where the room walls meet the back wall, and two cross frames through the open living room + kitchen (one in
     // the middle, one on the bedroom-3 wall x = 10 carried on to the middle wall), each with a column at both ends
     // and a beam across. The middle wall (z = 5) is carried by those frames; thin partitions (WC, the corridor
-    // stub, bedroom 3's inner walls, the x = 10.9 wall's front end) just sit on the beams.
+    // stub, bedroom 3's inner walls, the x = 10.77 wall's front end) just sit on the beams.
     const facade:Line={axis:'x',at:0.1,a0:1.0,a1:14},spine:Line={axis:'x',at:5.0,a0:0,a1:11.45};
-    for(const p of [[1.1,0.1],[13.9,0.1],[13.9,4],[0.1,5],[1.1,5],[0.1,8.9],[2.6,8.9],[6.45,8.9],[10.9,8.9],[13.9,8.9]])addPt(p[0],p[1]);
+    for(const p of [[1.1,0.1],[13.9,0.1],[13.9,4],[0.1,5],[1.1,5],[0.1,8.9],[2.6,8.9],[6.45,8.9],[10.77,8.9],[13.9,8.9],[10.77,6.25],[13.9,6.25]])addPt(p[0],p[1]);
     const cross:Line[]=[];
     const mid=nudge(1.1+(10-1.1)/2,[facade,spine],2.5,8.5);
     if(mid!==null){addPt(mid,0.1);addPt(mid,5.0);cross.push({axis:'z',at:mid,a0:0.1,a1:5.0});}
@@ -734,11 +778,11 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const fz=(z:number)=>MZ-z;
     for(const r of [...solids,...floors,...tiles]){if(keep.has(r))continue;const a=fz(r.z1),b=fz(r.z0);r.z0=a;r.z1=b;}
     for(const s of seats){s.z=fz(s.z);s.face=Math.PI-s.face;}
-    for(const b of beds){const a=fz(b.z1),c=fz(b.z0);b.z0=a;b.z1=c;b.head=b.head==='N'?'S':'N';}
+    for(const b of beds){const a=fz(b.z1),c=fz(b.z0);b.z0=a;b.z1=c;if(b.head==='N'||b.head==='S')b.head=b.head==='N'?'S':'N';}
     for(const w of [...windows,...wardrobes])w.z=fz(w.z);
     for(const d of doors)d.mirror=MZ;
     const mm=new THREE.Matrix4().makeScale(1,1,-1).setPosition(0,0,MZ);
-    [...cutPlanes,...thoPlanes].forEach(p=>p.applyMatrix4(mm));
+    [...cutPlanes,...thoPlanes,...flatPlanes].forEach(p=>p.applyMatrix4(mm));
     // a negative scale turns faces inside out for raycasting (camera occlusion, clicks): test both sides
     scene.traverse(o=>{const m=o as THREE.Mesh;if(!m.isMesh)return;(Array.isArray(m.material)?m.material:[m.material]).forEach(mt=>{mt.side=THREE.DoubleSide;});});
   }

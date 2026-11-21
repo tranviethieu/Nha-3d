@@ -359,16 +359,19 @@ export class Game {
   private lieDown(bed: Bed) {
     this.lying = { kind: 'lie', top: bed.top, back: { x: this.p.x, z: this.p.z, y: this.p.y } };
     this.p.speed = 0; this.p.vy = 0;
-    const cx = (bed.x0 + bed.x1) / 2;
-    // head 15 cm from the headboard; body extends 1.70 m toward the foot of the bed
-    const feetZ = bed.head === 'N' ? bed.z0 + 0.15 + HEIGHT : bed.z1 - 0.15 - HEIGHT;
+    const cx = (bed.x0 + bed.x1) / 2, cz = (bed.z0 + bed.z1) / 2;
+    // head 15 cm from the headboard; body extends 1.70 m toward the foot of the bed; face up, head toward the headboard
     const r = this.hero.root;
-    r.position.set(cx, bed.top + 0.11, feetZ);
-    // face up, head toward the headboard (-z for 'N', +z for 'S')
-    r.rotation.set(-Math.PI / 2, bed.head === 'N' ? 0 : Math.PI, 0, 'YXZ');
+    if (bed.head === 'N' || bed.head === 'S') {
+      r.position.set(cx, bed.top + 0.11, bed.head === 'N' ? bed.z0 + 0.15 + HEIGHT : bed.z1 - 0.15 - HEIGHT);
+      r.rotation.set(-Math.PI / 2, bed.head === 'N' ? 0 : Math.PI, 0, 'YXZ');
+    } else {
+      r.position.set(bed.head === 'E' ? bed.x0 + 0.15 + HEIGHT : bed.x1 - 0.15 - HEIGHT, bed.top + 0.11, cz);
+      r.rotation.set(-Math.PI / 2, bed.head === 'E' ? Math.PI / 2 : -Math.PI / 2, 0, 'YXZ');
+    }
     restPose(this.hero, false);
     this.hero.shadow.visible = false;
-    this.camTarget.set(cx, bed.top + 0.4, (bed.z0 + bed.z1) / 2);
+    this.camTarget.set(cx, bed.top + 0.4, cz);
     if (this.firstPerson) this.fpPitch = 1.2;
     this.onToast('Đang nằm trên giường — nhấn E hoặc phím di chuyển để dậy');
   }

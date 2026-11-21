@@ -53,32 +53,37 @@ export type Dir = '+x' | '-x' | '+z' | '-z';
 export interface DoorSpec {
   id: string; label: string; room: string; axis: 'x' | 'z'; at: number; hinge: number; len: number; pad?: number;
   cd: Dir; od: Dir; kind: 'main' | 'outer' | 'inner' | 'wc';
+  /** default leaf height (2.1 m if not given) */
+  h?: number;
 }
+/** Main entrance: fixed side light width on each side of the two leaves (total 2.8 m = 1.8 leaves + 2 x 0.5). */
+export const MAIN_SIDE = 0.5;
+/** Main entrance: fixed transom (ô sáng) over the leaves; leaves 2.25 + 0.45 = 2.7 m, level with the window tops. */
+export const MAIN_TRANSOM = 0.45;
 export const DOOR_SPECS: DoorSpec[] = [
-  { id: 'd-main', label: 'Cửa chính (đôi, nhôm kính)', room: 'Phòng khách', axis: 'z', at: 1.1, hinge: 2.575, len: 1.8, cd: '+z', od: '-x', kind: 'main' },
-  { id: 'd-bep', label: 'Cửa phụ bếp (mặt tiền)', room: 'Bếp + ăn', axis: 'x', at: 0.1, hinge: 6.0, len: 0.88, pad: 0.02, cd: '+x', od: '+z', kind: 'outer' },
+  { id: 'd-main', label: 'Cửa chính (đôi, nhôm kính)', room: 'Phòng khách', axis: 'z', at: 1.1, hinge: 2.575, len: 1.8, cd: '+z', od: '-x', kind: 'main', h: 2.25 },
   { id: 'd-hong', label: 'Cửa hông (tường Tây)', room: 'Hành lang', axis: 'z', at: 13.9, hinge: 4.1, len: 0.8, cd: '+z', od: '-x', kind: 'outer' },
   { id: 'd-tho', label: 'Cửa phòng thờ', room: 'Phòng thờ', axis: 'x', at: 5.0, hinge: 1.42, len: 0.8, cd: '+x', od: '+z', kind: 'inner' },
-  { id: 'd-pn1', label: 'Cửa phòng ngủ 1', room: 'Phòng ngủ 1', axis: 'x', at: 5.0, hinge: 6.17, len: 0.8, cd: '-x', od: '+z', kind: 'inner' },
-  { id: 'd-pn2', label: 'Cửa phòng ngủ 2', room: 'Phòng ngủ 2', axis: 'x', at: 5.0, hinge: 9.85, len: 0.8, cd: '-x', od: '+z', kind: 'inner' },
-  { id: 'd-pn3', label: 'Cửa phòng ngủ 3', room: 'Phòng ngủ 3', axis: 'x', at: 4.0, hinge: 10.15, len: 0.8, cd: '+x', od: '-z', kind: 'inner' },
+  { id: 'd-pn1', label: 'Cửa phòng ngủ 1', room: 'Phòng ngủ 1', axis: 'x', at: 5.0, hinge: 6.17, len: 0.9, cd: '-x', od: '+z', kind: 'inner', h: 2.2 },
+  { id: 'd-pn2', label: 'Cửa phòng ngủ 2', room: 'Phòng ngủ 2', axis: 'x', at: 5.0, hinge: 9.85, len: 0.9, cd: '-x', od: '+z', kind: 'inner', h: 2.2 },
+  { id: 'd-pn3', label: 'Cửa phòng ngủ 3', room: 'Phòng ngủ 3', axis: 'x', at: 4.0, hinge: 10.15, len: 0.9, cd: '+x', od: '-z', kind: 'inner', h: 2.2 },
   { id: 'd-wc1', label: 'Cửa WC1', room: 'WC1', axis: 'x', at: 6.25, hinge: 12.24, len: 0.7, cd: '-x', od: '+z', kind: 'wc' },
   { id: 'd-wc2', label: 'Cửa WC2', room: 'WC2', axis: 'x', at: 6.25, hinge: 13.57, len: 0.7, cd: '-x', od: '+z', kind: 'wc' },
 ];
 /** A window opening [x0, z0, x1, z1, y0, y1] in default plan coords (the box spans the wall thickness). */
-export interface WinSpec { id: string; label: string; room: string; rect: [number, number, number, number, number, number]; style: 'triple' | 'awning' | 'double' }
+export interface WinSpec { id: string; label: string; room: string; rect: [number, number, number, number, number, number]; style: 'triple' | 'quad' | 'awning' | 'double' }
 export const WIN_SPECS: WinSpec[] = [
-  { id: 'w-khach', label: 'Cửa sổ phòng khách (3 cánh)', room: 'Phòng khách', rect: [2.8, -0.02, 4.4, 0.22, 0.9, 2.2], style: 'triple' },
+  { id: 'w-khach', label: 'Cửa sổ phòng khách (4 cánh, 2,44 m)', room: 'Phòng khách', rect: [2.38, -0.02, 4.82, 0.22, 0.9, 2.7], style: 'quad' },
+  { id: 'w-bep2', label: 'Cửa sổ bếp 0,8 m (thay cửa phụ)', room: 'Bếp + ăn', rect: [6.04, -0.02, 6.84, 0.22, 0.9, 2.7], style: 'double' },
   { id: 'w-bep', label: 'Cửa sổ bếp (hất lên)', room: 'Bếp + ăn', rect: [7.97, -0.02, 9.17, 0.22, 0.9, 1.7], style: 'awning' },
-  { id: 'w-pn3t', label: 'Cửa sổ mặt tiền', room: 'Phòng ngủ 3', rect: [10.1, -0.02, 11.1, 0.22, 0.9, 2.2], style: 'double' },
-  { id: 'w-tho', label: 'Cửa sổ phòng thờ (3 cánh)', room: 'Phòng thờ', rect: [-0.02, 6.12, 0.22, 7.72, 0.9, 2.2], style: 'triple' },
-  { id: 'w-pn1', label: 'Cửa sổ', room: 'Phòng ngủ 1', rect: [5.37, 8.78, 6.37, 9.02, 0.9, 2.2], style: 'double' },
-  { id: 'w-pn2', label: 'Cửa sổ', room: 'Phòng ngủ 2', rect: [9.53, 8.78, 10.73, 9.02, 0.9, 2.2], style: 'double' },
+  { id: 'w-pn3t', label: 'Cửa sổ mặt tiền', room: 'Phòng ngủ 3', rect: [10.15, -0.02, 11.3, 0.22, 0.9, 2.7], style: 'double' },
+  { id: 'w-tho', label: 'Cửa sổ phòng thờ (3 cánh)', room: 'Phòng thờ', rect: [-0.02, 6.12, 0.22, 7.72, 0.9, 2.7], style: 'triple' },
+  { id: 'w-pn1', label: 'Cửa sổ', room: 'Phòng ngủ 1', rect: [3.95, 8.78, 5.1, 9.02, 0.9, 2.7], style: 'double' },
+  { id: 'w-pn2', label: 'Cửa sổ', room: 'Phòng ngủ 2', rect: [8.035, 8.78, 9.185, 9.02, 0.9, 2.7], style: 'double' },
   { id: 'w-wc1', label: 'Cửa sổ', room: 'WC1', rect: [11.33, 8.78, 11.93, 9.02, 1.6, 2.2], style: 'double' },
   { id: 'w-wc2', label: 'Cửa sổ', room: 'WC2', rect: [12.81, 8.78, 13.41, 9.02, 1.6, 2.2], style: 'double' },
-  // west wall (x = 14; the porch side x = 0 faces east): beside the washing machine, and beside the bed in P. ngủ 3
+  // west wall (x = 14; the porch side x = 0 faces east): beside the washing machine
   { id: 'w-giat', label: 'Cửa sổ cạnh máy giặt', room: 'Lavabo', rect: [13.78, 5.25, 14.02, 5.95, 1.1, 2.0], style: 'double' },
-  { id: 'w-pn3w', label: 'Cửa sổ cạnh giường (tường Tây)', room: 'Phòng ngủ 3', rect: [13.78, 0.9, 14.02, 2.1, 0.9, 2.2], style: 'double' },
 ];
 const winAlongX = (r: WinSpec['rect']) => r[2] - r[0] > r[3] - r[1];
 
@@ -86,8 +91,8 @@ const winAlongX = (r: WinSpec['rect']) => r[2] - r[0] > r[3] - r[1];
  *  width (each leaf for the main door: w / 2); hingeAt: where the (first) leaf hinges. */
 export interface DoorEff { spec: DoorSpec; w: number; h: number; span: [number, number]; hidden: boolean }
 export function doorEff(s: DoorSpec, o: OpeningOverride = {}): DoorEff {
-  const w = o.w ?? s.len, h = o.h ?? 2.1;
-  const span: [number, number] = s.kind === 'main' ? [s.hinge - w / 2 - 0.7, s.hinge + w / 2 + 0.7]
+  const w = o.w ?? s.len, h = o.h ?? s.h ?? 2.1;
+  const span: [number, number] = s.kind === 'main' ? [s.hinge - w / 2 - MAIN_SIDE, s.hinge + w / 2 + MAIN_SIDE]
     : s.cd[0] === '+' ? [s.hinge, s.hinge + w + (s.pad ?? 0)] : [s.hinge - w, s.hinge];
   return { spec: s, w, h, span, hidden: !!o.hidden };
 }
@@ -119,15 +124,15 @@ export const ROOM_DIMS: RoomDim[] = [
   { room: 'Hành lang', title: 'Hành lang', rect: [10.05, 4.05, 13.8, 4.95], w: '3.75', d: '0.9', area: '≈3.38' },
   { room: 'Phòng thờ', title: 'P. thờ', rect: [0.2, 5.05, 2.55, 8.8], w: '2.35', d: '3.75', area: '8.81' },
   { room: 'Phòng ngủ 1', title: 'Phòng ngủ 1', rect: [2.65, 5.05, 6.4, 8.8], w: '3.75', d: '3.75', area: '14.06' },
-  { room: 'Phòng ngủ 2', title: 'Phòng ngủ 2', rect: [6.5, 5.05, 10.85, 8.8], w: '4.35', d: '3.75', area: '16.31' },
-  { room: 'Lavabo', title: 'Giặt + rửa', rect: [10.95, 5.05, 13.8, 6.2], w: '2.85', d: '1.15', area: '3.28' },
-  { room: 'WC1', title: 'WC1', rect: [10.95, 6.3, 12.325, 8.8], w: '1.38', d: '2.5', area: '3.44' },
-  { room: 'WC2', title: 'WC2', rect: [12.425, 6.3, 13.8, 8.8], w: '1.38', d: '2.5', area: '3.44' },
+  { room: 'Phòng ngủ 2', title: 'Phòng ngủ 2', rect: [6.5, 5.05, 10.72, 8.8], w: '4.22', d: '3.75', area: '15.83' },
+  { room: 'Lavabo', title: 'Giặt + rửa', rect: [10.82, 5.05, 13.8, 6.2], w: '2.98', d: '1.15', area: '3.43' },
+  { room: 'WC1', title: 'WC1', rect: [10.84, 6.32, 12.44, 8.78], w: '1.6', d: '2.46', area: '3.94' },
+  { room: 'WC2', title: 'WC2', rect: [12.58, 6.32, 13.78, 8.78], w: '1.2', d: '2.46', area: '2.95' },
 ];
 
 // Rigid spans in default plan coords: wall thickness (walls running along z for X, along x for Z, incl. the WC
 // tile skins). Door and window openings are added per layout in PlanMap. Keep in sync with WALLS in house.ts.
-const WALL_RIGID_X: [number, number][] = [[0, 0.2], [1.0, 1.2], [2.55, 2.65], [6.4, 6.5], [9.95, 10.05], [10.85, 10.97], [12.305, 12.445], [13.78, 14]];
+const WALL_RIGID_X: [number, number][] = [[0, 0.2], [1.0, 1.2], [2.55, 2.65], [6.4, 6.5], [9.95, 10.05], [10.72, 10.84], [12.44, 12.58], [13.78, 14]];
 const WALL_RIGID_Z: [number, number][] = [[0, 0.2], [3.95, 4.05], [4.95, 5.05], [6.2, 6.32], [8.78, 9]];
 
 class Axis {
@@ -145,7 +150,7 @@ class Axis {
       if (tot > 0) ov.forEach((o, i) => { add[i] += d * o / tot; });
     }
     this.nb = [this.b[0]];
-    for (let i = 0; i < n; i++) this.nb.push(this.nb[i] + Math.max(0.02, len[i] + add[i]));
+    for (let i = 0; i < n; i++) this.nb.push(this.nb[i] + (elastic[i] ? Math.max(0.02, len[i] + add[i]) : len[i]));
   }
   /** Default plan coordinate -> edited plan coordinate. */
   m(x: number) {
