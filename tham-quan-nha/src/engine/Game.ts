@@ -204,6 +204,38 @@ export class Game {
     }
   }
 
+  // ======================= drawings for the PDF export =======================
+  /** Everything the PDF needs besides pictures: the plan map, mirror, structure counts, openings, furniture. */
+  designData() {
+    const S = this.house.structure;
+    return { map: this.map, mirrorZ: this.house.mirrorZ, walls: this.house.walls, structure: { columns: S.columns, footings: S.footings, groundBeam: S.groundBeam, tieBeam: S.tieBeam },
+      openings: this.openings(), objects: this.house.objects, rooms: this.roomSizes(), roofs: this.map.roofs };
+  }
+  /** Render one view off-screen and return it as a PNG data URL. Orthographic views take the half extents of the
+   *  frame in world metres; `clipY` cuts everything above that height (floor plans); `structure` shows the frame
+   *  with the house ghosted. Labels, dimension overlays, the character and fog are hidden while rendering. */
+  snapshot(v: { pos: V3; target: V3; up?: V3; half?: [number, number]; fov?: number }, o: { w: number; h: number; roof: boolean; structure?: boolean; clipY?: number }): string {
+    const h = this.house, keep = { roof: h.roof.visible, labels: h.labels.map(s => s.visible), dims: this.dims.group.visible, hero: this.hero.root.visible,
+      shadow: this.hero.shadow.visible, marker: this.marker.visible, fog: this.scene.fog, bg: (this.scene.background as THREE.Color).clone(), struct: this.structOn, ratio: this.renderer.getPixelRatio() };
+    h.roof.visible = o.roof; h.labels.forEach(s => { s.visible = false; }); this.dims.group.visible = false;
+    this.hero.root.visible = this.hero.shadow.visible = this.marker.visible = false;
+    this.scene.fog = null; (this.scene.background as THREE.Color).set(0xffffff);
+    if (!!o.structure !== this.structOn) { this.structOn = !!o.structure; this.applyStructure(); }
+    if (o.clipY !== undefined) this.renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), o.clipY)];
+    const cam = v.half ? new THREE.OrthographicCamera(-v.half[0], v.half[0], v.half[1], -v.half[1], 0.05, 80) : new THREE.PerspectiveCamera(v.fov ?? 35, o.w / o.h, 0.1, 200);
+    cam.position.set(...v.pos); cam.up.set(...(v.up ?? [0, 1, 0])); cam.lookAt(...v.target); cam.updateProjectionMatrix();
+    this.renderer.setPixelRatio(1); this.renderer.setSize(o.w, o.h, false);
+    this.renderer.render(this.scene, cam);
+    const url = this.renderer.domElement.toDataURL('image/png');
+    this.renderer.clippingPlanes = [];
+    h.roof.visible = keep.roof; h.labels.forEach((s, i) => { s.visible = keep.labels[i]; }); this.dims.group.visible = keep.dims;
+    this.hero.root.visible = keep.hero; this.hero.shadow.visible = keep.shadow; this.marker.visible = keep.marker;
+    this.scene.fog = keep.fog; (this.scene.background as THREE.Color).copy(keep.bg);
+    if (keep.struct !== this.structOn) { this.structOn = keep.struct; this.applyStructure(); }
+    this.renderer.setPixelRatio(keep.ratio); this.resize();
+    return url;
+  }
+
   // ======================= living-room TV (YouTube) =======================
   /** The playing TV: the iframe as a CSS3D object behind the screen, whose material is swapped for a hole. */
   private tv: { obj: CSS3DObject; iframe: HTMLIFrameElement; screenMat: THREE.Material | THREE.Material[]; url: string } | null = null;

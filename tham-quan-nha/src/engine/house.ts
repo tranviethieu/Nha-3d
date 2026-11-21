@@ -53,6 +53,8 @@ export interface House {
   objects: ObjInfo[];
   /** Preliminary structural frame (footings, ground beams, columns, tie beams), hidden until shown; beam lengths in m. */
   structure: { group: THREE.Group; columns: number; footings: number; groundBeam: number; tieBeam: number };
+  /** Wall boxes [x0, z0, x1, z1] in DEFAULT plan coords (map them with mx / mz), for drawn floor plans. */
+  walls: number[][];
 }
 export interface HouseLights {
   /** Light washes on the walls (additive planes), shown only when the lights are on. */
@@ -788,5 +790,5 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   }
   scene.updateMatrixWorld(true);
   const rb=new THREE.Box3().setFromObject(rackG),rc=rb.getCenter(new THREE.Vector3());
-  return { solids, floors, tiles, occluders, doors, wcDoors, windows, wardrobes, beds, seats, labels, clickables, roof: roofG, rack: { group: rackG, armL, armR }, rackPos: [rc.x, rc.z], root, objects, mirrorZ, lights, tvScreen, structure };
+  return { solids, floors, tiles, occluders, doors, wcDoors, windows, wardrobes, beds, seats, labels, clickables, roof: roofG, rack: { group: rackG, armL, armR }, rackPos: [rc.x, rc.z], root, objects, mirrorZ, lights, tvScreen, structure, walls: WALLS };
 }

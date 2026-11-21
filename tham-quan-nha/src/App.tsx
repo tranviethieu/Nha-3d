@@ -96,6 +96,16 @@ export default function App() {
     catch (e) { setStatus({ kind: 'error', text: (e as Error).message }); }
   };
 
+  // "Xuất PDF": the whole design as A3 drawing sheets (loaded on demand)
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const exportPdf = async (x: Game) => {
+    if (pdfBusy) return; setPdfBusy(true);
+    const say = (text: string) => setToast({ text, id: Date.now() });
+    try { const { exportDesignPdf } = await import('./engine/exportPdf'); await exportDesignPdf(x, say); say('Đã xuất file PDF hồ sơ thiết kế'); }
+    catch (e) { say('Không xuất được PDF: ' + (e as Error).message); }
+    finally { setPdfBusy(false); }
+  };
+
   // overview bar: the main actions, the rest under "Chi tiết"
   const overviewButtons = [
     { icon: 'ti-settings', label: 'Cài đặt', run: () => setSettingsOpen(o => !o) },
@@ -106,6 +116,7 @@ export default function App() {
     { icon: 'ti-cube', label: 'Phối cảnh', run: (x: Game) => x.viewPerspective() },
     { icon: 'ti-door', label: hud?.anyDoorClosed === false ? 'Đóng tất cả cửa' : 'Mở tất cả cửa', run: (x: Game) => x.toggleAllDoors() },
     { icon: 'ti-ruler-measure', label: hud?.dimsOn ? 'Ẩn kích thước' : 'Hiện kích thước', run: (x: Game) => x.toggleDims() },
+    { icon: 'ti-file-type-pdf', label: pdfBusy ? 'Đang xuất…' : 'Xuất PDF', run: (x: Game) => { void exportPdf(x); } },
   ];
   const detailButtons = [
     { icon: 'ti-bath', label: 'Xem nhà vệ sinh', run: (x: Game) => x.viewWC() },
