@@ -4,6 +4,7 @@ import { TouchControls } from './components/TouchControls';
 import { Toast } from './components/Toast';
 import { Settings, type SaveStatus } from './components/Settings';
 import { emptyLayout, type Layout } from './engine/layout';
+import { PIPE_STYLE } from './engine/plumbing';
 import { dbConfigured, deleteLayout, loadLayout, postChat, saveLayout } from './db';
 import { Chat } from './components/Chat';
 import { describeChanges, logText } from './engine/changes';
@@ -113,6 +114,7 @@ export default function App() {
     { icon: 'ti-home', label: hud?.roofOn ? 'Ẩn mái' : 'Hiện mái', run: (x: Game) => x.toggleRoof() },
     { icon: hud?.lightsOn ? 'ti-bulb-off' : 'ti-bulb', label: hud?.lightsOn ? 'Tắt đèn' : 'Bật đèn', run: (x: Game) => x.toggleLights() },
     { icon: 'ti-building', label: hud?.structure ? 'Ẩn kết cấu' : 'Kết cấu', run: (x: Game) => x.toggleStructure() },
+    { icon: 'ti-droplet', label: hud?.pipes ? 'Ẩn ống nước' : 'Ống nước', run: (x: Game) => x.togglePipes() },
     { icon: 'ti-cube', label: 'Phối cảnh', run: (x: Game) => x.viewPerspective() },
     { icon: 'ti-door', label: hud?.anyDoorClosed === false ? 'Đóng tất cả cửa' : 'Mở tất cả cửa', run: (x: Game) => x.toggleAllDoors() },
     { icon: 'ti-ruler-measure', label: hud?.dimsOn ? 'Ẩn kích thước' : 'Hiện kích thước', run: (x: Game) => x.toggleDims() },
@@ -152,6 +154,15 @@ export default function App() {
           <h1>Mô hình 3D</h1>
           <div className="room">Nhà {hud?.houseSize ?? '9 × 14 m'}</div>
           <p className="sub">WC1 và WC2 có sen cây đứng, ngoài WC1 có bàn lavabo đôi với gương</p>
+          {hud?.pipes && (
+            <div className="struct-legend">
+              <div className="t">Cấp thoát nước</div>
+              <ul>
+                {Object.values(PIPE_STYLE).map(p => <li key={p.name}><span className="sw" style={{ background: p.css }} />{p.name} · {p.spec}</li>)}
+              </ul>
+              <p>Téc 1500 L trên mái bằng WC cấp tự chảy; ống chính đi trên sàn gác WC và trong trần thạch cao ra bếp. Ống đứng thông hơi trong hộp kỹ thuật góc WC1. Xí vào bể phốt sau nhà, nước sàn vào hố ga HG1, chậu bếp ra HG2 rồi ra mương.</p>
+            </div>
+          )}
           {hud?.structure && (
             <div className="struct-legend">
               <div className="t">Kết cấu sơ bộ</div>
@@ -161,7 +172,7 @@ export default function App() {
                 <li><span className="sw" style={{ background: '#c23b2e' }} />Cột 220 × 220 · {hud.structure.columns} cột</li>
                 <li><span className="sw" style={{ background: '#d99a1e' }} />Dầm giằng 220 × 300 · ~{hud.structure.tieBeam} m</li>
               </ul>
-              <p>Lưới cột nhịp phổ biến 3,5–5 m: góc nhà, chỗ tường phòng gặp tường sau, và 2 khung dầm ngang qua phòng khách + bếp (tránh cửa). Vách mỏng đặt lên dầm. Nhịp dài quá 5 m tự thêm cột. Kích thước thép, bê tông cần kỹ sư kết cấu tính.</p>
+              <p>Hai hàng cột biên dọc nhà, cột giữa chỉ ở góc phòng kín trùng tường; phòng khách, bếp không có cột giữa phòng. Hiên đứng trên dầm móng vươn ra. Vị trí C, D xem bản vẽ KT-05B. Kích thước thép, bê tông cần kỹ sư kết cấu tính.</p>
             </div>
           )}
         </div>

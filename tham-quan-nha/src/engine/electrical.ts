@@ -21,9 +21,8 @@ export const CIRCUITS: Circuit[] = [
   { id: 'C8', name: 'Điều hoà phòng ngủ 1 9000 BTU', breaker: 'MCB 2P 16A', cable: '2 × 2.5 mm²', kw: 0.8 },
   { id: 'C9', name: 'Điều hoà phòng ngủ 2 9000 BTU', breaker: 'MCB 2P 16A', cable: '2 × 2.5 mm²', kw: 0.8 },
   { id: 'C10', name: 'Điều hoà phòng ngủ 3 9000 BTU', breaker: 'MCB 2P 16A', cable: '2 × 2.5 mm²', kw: 0.8 },
-  { id: 'C11', name: 'Bình nóng lạnh WC1 30 L', breaker: 'RCBO 2P 20A 30mA', cable: '2 × 2.5 mm²', kw: 2.5 },
-  { id: 'C12', name: 'Bình nóng lạnh WC2 30 L', breaker: 'RCBO 2P 20A 30mA', cable: '2 × 2.5 mm²', kw: 2.5 },
-  { id: 'C13', name: 'Camera, wifi, mạng', breaker: 'MCB 1P 6A', cable: '2 × 1.5 mm²', kw: 0.1 },
+  { id: 'C11', name: 'Bình nóng lạnh 50 L (WC1, dùng chung 2 WC + lavabo)', breaker: 'RCBO 2P 20A 30mA', cable: '2 × 2.5 mm²', kw: 2.5 },
+  { id: 'C12', name: 'Camera, wifi, mạng', breaker: 'MCB 1P 6A', cable: '2 × 1.5 mm²', kw: 0.1 },
 ];
 
 const S = (room: string, x: number, z: number, y: number, n: Dir, circuit: string, note?: string): ElecItem => ({ kind: 'socket', room, x, z, y, n, circuit, note });
@@ -40,7 +39,7 @@ export const ELEC: ElecItem[] = [
   S('Phòng khách', 3.68, 4.95, 0.4, '-z', 'C3', 'bàn góc'),
   S('Phòng khách', 5.9, 1.9, 0.75, '-x', 'C3', 'tivi'), S('Phòng khách', 5.9, 2.7, 0.75, '-x', 'C3', 'đầu thu, loa'),
   { kind: 'data', room: 'Phòng khách', x: 5.9, z: 2.3, y: 0.75, n: '-x', circuit: '', note: 'mạng + truyền hình' },
-  { kind: 'camera', room: 'Phòng khách', x: 5.75, z: 0.2, y: 2.95, n: '+z', circuit: 'C13', note: 'nhìn ra cửa chính' },
+  { kind: 'camera', room: 'Phòng khách', x: 5.75, z: 0.2, y: 2.95, n: '+z', circuit: 'C12', note: 'nhìn ra cửa chính' },
   // ---- Bếp + ăn ----
   SW('Bếp + ăn', 9.95, 3.75, 1.25, '-x', 'C1', 'lối vào hành lang'),
   SW('Bếp + ăn', 6.75, 4.95, 1.25, '-z', 'C1', 'phía phòng ăn'),
@@ -90,13 +89,11 @@ export const ELEC: ElecItem[] = [
   // ---- Giặt + rửa ----
   SW('Lavabo', 11.35, 5.05, 1.25, '+z', 'C2', 'lối vào'), SW('Lavabo', 13.35, 5.05, 1.25, '+z', 'C2', 'lối vào'),
   S('Lavabo', 10.82, 6.15, 1.2, '+x', 'C7', 'máy sấy tóc'), S('Lavabo', 13.8, 6.1, 1.25, '-x', 'C7', 'máy giặt'),
-  // ---- WC1, WC2: one switch outside, one inside; double-pole heater switch outside ----
+  // ---- WC1, WC2: one switch outside, one inside; ONE water heater (in WC1) shared by both WCs + the lavabo ----
   SW('WC1', 11.35, 6.2, 1.25, '-z', 'C2', 'ngoài cửa'), SW('WC1', 11.35, 6.32, 1.25, '+z', 'C2', 'trong WC'),
   { kind: 'heaterSw', room: 'WC1', x: 11.12, z: 6.2, y: 1.25, n: '-z', circuit: 'C11', note: 'công tắc 2 cực có đèn báo' },
-  { kind: 'heater', room: 'WC1', x: 10.84, z: 8.35, y: 2.05, n: '+x', circuit: 'C11', note: '30 L, trên chỗ tắm' },
+  { kind: 'heater', room: 'WC1', x: 10.84, z: 8.32, y: 2.05, n: '+x', circuit: 'C11', note: '50 L, dùng chung 2 WC' },
   SW('WC2', 12.72, 6.2, 1.25, '-z', 'C2', 'ngoài cửa'), SW('WC2', 13.65, 6.32, 1.25, '+z', 'C2', 'trong WC'),
-  { kind: 'heaterSw', room: 'WC2', x: 12.72, z: 6.2, y: 1.5, n: '-z', circuit: 'C12', note: 'công tắc 2 cực có đèn báo' },
-  { kind: 'heater', room: 'WC2', x: 13.78, z: 6.95, y: 2.05, n: '-x', circuit: 'C12', note: '30 L, trên chỗ tắm' },
   // ---- ngoài nhà ----
   S('Sảnh', 1.0, 0.6, 0.4, '-x', 'C3', 'ổ ngoài trời có nắp IP44'),
 ];

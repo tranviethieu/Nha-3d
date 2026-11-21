@@ -3,6 +3,7 @@
 // they subtract (7, 4.5) so the house is centered on the world origin.
 import * as THREE from 'three';
 import { ELEC } from './electrical';
+import { PIPES, PIPE_STYLE, SHAFT, FLOOR_DRAINS, SEPTIC, MANHOLES } from './plumbing';
 import { LIGHT_SPACING, MAIN_SIDE, MAIN_TRANSOM, PlanMap, ROOM_DIMS, emptyLayout, type Layout } from './layout';
 
 export type Dir = '+x' | '-x' | '+z' | '-z';
@@ -53,6 +54,7 @@ export interface House {
   /** Furniture / fixtures that can be resized and moved in the settings panel. */
   objects: ObjInfo[];
   /** Preliminary structural frame (footings, ground beams, columns, tie beams), hidden until shown; beam lengths in m. */
+  pipes: THREE.Group;
   structure: { group: THREE.Group; columns: number; footings: number; groundBeam: number; tieBeam: number;
     /** Column centres and tie-beam centre lines in EDITED plan coords (for the labelled C / D plan in the PDF). */
     cols: { x: number; z: number; porch: boolean }[]; beams: { x0: number; z0: number; x1: number; z1: number; porch: boolean }[] };
@@ -722,7 +724,10 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const disc=(r:number,mat:THREE.Material,x:number,y:number,z:number)=>{const m=new THREE.Mesh(new THREE.CircleGeometry(r,24),mat);m.rotation.x=Math.PI/2;m.position.set(x-7,y,z-4.5);scene.add(m);};
     const down=(x:number,z:number,y:number,bm:THREE.Material,room:string)=>{disc(0.075,ringMat,x,y-0.003,z);disc(0.058,bm,x,y-0.006,z);lights.indoor++;lights.fixtures.push({x,z,kind:'down',room});};
     const DIRV:Record<Dir,[number,number]>={'+x':[1,0],'-x':[-1,0],'+z':[0,1],'-z':[0,-1]};
-    const TRAYS=new Set(['Phòng khách','Phòng ngủ 1','Phòng ngủ 2','Phòng ngủ 3']);
+    const TRAYS=new Set(['Phòng khách']);
+    // bedrooms: flat ceiling, no light over the bed head (default plan coords of the zone at each bed's head)
+    const HEAD_ZONE:Record<string,[number,number,number,number]>={'Phòng ngủ 1':[2.4,5.0,4.7,6.35],'Phòng ngủ 2':[6.45,6.3,7.75,8.6],'Phòng ngủ 3':[11.3,0.15,13.6,1.5]};
+    const inHead=(room:string,x:number,z:number)=>{const h=HEAD_ZONE[room];if(!h)return false;return x>mx(h[0])&&x<mx(h[2])&&z>mz(h[1])&&z<mz(h[3]);};
     // WC concrete ceiling height, and the x (default plan) of each WC's loft hatch = its door centre
     const WC_CEIL=2.4,WC_SLAB:Record<string,number>={WC1:11.89,WC2:13.22};
     const slabMat=new THREE.MeshStandardMaterial({color:0xe9e8e4,roughness:0.95}),hatchMat=M(0xd9d4cb),loftBox=M(0xb08d5e);
@@ -757,6 +762,17 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
         // a few storage boxes on the slab (seen with the roof off)
         [[0.25,0.45,0.42,0.32],[0.75,0.3,0.4,0.3],[0.3,1.2,0.5,0.35],[0.7,1.75,0.38,0.28]].forEach(([u,v,s2,h2])=>{if(u+s2/2>w-0.05)return;
           const bx=new THREE.Mesh(new THREE.BoxGeometry(s2,h2,s2*0.8),loftBox);bx.position.set(a0+u-7,WC_CEIL+0.1+h2/2,b0+v+0.3-4.5);scene.add(bx);});
+      }else if(HEAD_ZONE[r.room]){
+        // flat ceiling: a ceiling light (ốp trần) over the free floor, downlights on a ~1.3 m grid, none at the bed head
+        ceil(x0,z0,x1,z1,CEIL);
+        let lx=cx,lz=cz;const h=HEAD_ZONE[r.room];
+        if(inHead(r.room,lx,lz)){const hz=[mx(h[0]),mz(h[1]),mx(h[2]),mz(h[3])];
+          const cand:[number,number][]=[[cx,hz[3]+0.6],[cx,hz[1]-0.6],[hz[2]+0.6,cz],[hz[0]-0.6,cz]].filter(p=>p[0]>a0+0.4&&p[0]<a1-0.4&&p[1]>b0+0.4&&p[1]<b1-0.4) as [number,number][];
+          if(cand.length)[lx,lz]=cand[0];}
+        disc(0.26,ringMat,lx,CEIL-0.004,lz);disc(0.23,R.bulb,lx,CEIL-0.008,lz);lights.indoor++;lights.fixtures.push({x:lx,z:lz,kind:'ceiling',room:r.room});
+        const nx=Math.max(2,Math.round((w-0.3)/1.3)),nz=Math.max(2,Math.round((d-0.3)/1.3));
+        for(let i=0;i<nx;i++)for(let k=0;k<nz;k++){const x=a0+0.45+(w-0.9)*i/(nx-1),z=b0+0.45+(d-0.9)*k/(nz-1);
+          if(inHead(r.room,x,z)||Math.hypot(x-lx,z-lz)<0.7)continue;down(x,z,CEIL,R.bulb,r.room);}
       }else{
         ceil(x0,z0,x1,z1,CEIL);
         const nx=Math.max(1,Math.round((w-0.4)/1.6)),nz=Math.max(1,Math.round((d-0.4)/1.6));
@@ -859,6 +875,29 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     for(const l of [{axis:'z',at:-0.625,a0:0.11,a1:4.84},{axis:'x',at:0.11,a0:-0.625,a1:1.1},{axis:'x',at:4.84,a0:-0.625,a1:1.1}] as Line[])
       {structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);structure.tieBeam+=beam(l,PC,PC+0.3,SM.tie);rec(l,true);}
   }
+  // ---- water supply / drainage (plumbing.ts): pipes in a hidden group shown by the "Ống nước" button (house
+  // ghosted); the technical shaft box and the floor drains are real fittings, always shown.
+  const pipeG=new THREE.Group();pipeG.visible=false;scene.add(pipeG);
+  {
+    const P3=(p:[number,number,number])=>new THREE.Vector3(mx(p[0])-7,p[1],mz(p[2])-4.5);
+    const mats:Record<string,THREE.Material>={};
+    for(const k of Object.keys(PIPE_STYLE))mats[k]=new THREE.MeshStandardMaterial({color:PIPE_STYLE[k as keyof typeof PIPE_STYLE].color,roughness:0.45,emissive:PIPE_STYLE[k as keyof typeof PIPE_STYLE].color,emissiveIntensity:0.25});
+    for(const pp of PIPES){const r=Math.max(0.014,pp.d/2000),mat=mats[pp.kind];
+      for(let i=0;i+1<pp.pts.length;i++){const a=P3(pp.pts[i]),b=P3(pp.pts[i+1]),L=a.distanceTo(b);if(L<0.005)continue;
+        const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,L,10),mat);m.position.copy(a).add(b).multiplyScalar(0.5);
+        m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());pipeG.add(m);
+        const j=new THREE.Mesh(new THREE.SphereGeometry(r*1.25,10,8),mat);j.position.copy(b);pipeG.add(j);}}
+    // septic tank + manholes (below ground) and the vent cap
+    const conc=new THREE.MeshStandardMaterial({color:0x9c9890,roughness:0.9,transparent:true,opacity:0.75});
+    const g=new THREE.Mesh(new THREE.BoxGeometry(mx(SEPTIC.x1)-mx(SEPTIC.x0),SEPTIC.depth,Math.abs(mz(SEPTIC.z1)-mz(SEPTIC.z0))),conc);
+    g.position.set((mx(SEPTIC.x0)+mx(SEPTIC.x1))/2-7,-0.3-SEPTIC.depth/2,(mz(SEPTIC.z0)+mz(SEPTIC.z1))/2-4.5);pipeG.add(g);
+    for(const h of MANHOLES){const m=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.5),conc);m.position.set(mx(h.x)-7,-0.35,mz(h.z)-4.5);pipeG.add(m);}
+    const cap=new THREE.Mesh(new THREE.ConeGeometry(0.07,0.1,12),mats.vent);cap.position.set(mx(12.24)-7,4.6,mz(8.58)-4.5);pipeG.add(cap);
+    // technical shaft (tiled box, access panel facing the room) and floor drain grates
+    const shaftMat=M(0xdfe3e6);box(SHAFT.x0,SHAFT.z0,SHAFT.x1,SHAFT.z1,0,SHAFT.y1,shaftMat,true);
+    box(SHAFT.x0+0.08,SHAFT.z0-0.012,SHAFT.x1-0.08,SHAFT.z0,0.9,1.5,M(0xc9ced2),false);
+    const grate=M(0x9aa1a8);for(const [x,z] of FLOOR_DRAINS)box(x-0.075,z-0.075,x+0.075,z+0.075,0.003,0.008,grate,false);
+  }
   // ---- electrical fittings (electrical.ts): 2-way switches (click / E toggles the room's lights), sockets, air
   // conditioners, wall TVs, water heaters, the living-room camera and the main panel, on their wall faces.
   const switches:House['switches']=[];
@@ -886,7 +925,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
         for(const dx of [-0.3,0.3]){B(0.04,0.04,0.42,grey,dx,-0.295,0);B(0.04,0.3,0.04,grey,dx,-0.43,0);}
         const pipe=M(0xe8e6df);B(0.05,0.05,0.1,pipe,0.33,0.1,0);B(0.05,0.18,0.05,pipe,0.33,0.2,0.05);}
       else if(e.kind==='tv'){B(0.97,0.57,0.03,black);B(0.94,0.53,0.004,screen,0,0,0.03);}
-      else if(e.kind==='heater'){C(0.19,0.78,acMat,0,0,0.22,'x');B(0.5,0.05,0.04,grey,0,0,0);
+      else if(e.kind==='heater'){C(0.21,0.92,acMat,0,0,0.24,'x');B(0.5,0.05,0.04,grey,0,0,0);
         for(const dx of [-0.12,0.12]){const pp=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.45,8),grey);pp.position.set(dx,-0.4,0.18);g.add(pp);}}
       else if(e.kind==='camera'){B(0.09,0.09,0.03,acMat);const head=new THREE.Group();head.position.set(0,-0.03,0.09);head.rotation.y=-Math.PI/4;g.add(head);
         const body=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.14),acMat);body.position.set(0,0,0.04);head.add(body);
@@ -917,5 +956,5 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   }
   scene.updateMatrixWorld(true);
   const rb=new THREE.Box3().setFromObject(rackG),rc=rb.getCenter(new THREE.Vector3());
-  return { solids, floors, tiles, occluders, doors, wcDoors, windows, wardrobes, beds, seats, labels, clickables, roof: roofG, rack: { group: rackG, armL, armR }, rackPos: [rc.x, rc.z], root, objects, mirrorZ, lights, tvScreen, structure, walls: WALLS, switches };
+  return { solids, floors, tiles, occluders, doors, wcDoors, windows, wardrobes, beds, seats, labels, clickables, roof: roofG, rack: { group: rackG, armL, armR }, rackPos: [rc.x, rc.z], root, objects, mirrorZ, lights, tvScreen, structure, pipes: pipeG, walls: WALLS, switches };
 }

@@ -39,6 +39,8 @@ export interface HudState {
   tvOn: boolean;
   /** Structural frame shown (house ghosted): counts for the legend, or null when hidden. */
   structure: { columns: number; footings: number; groundBeam: number; tieBeam: number } | null;
+  /** Water pipes shown (house ghosted). */
+  pipes: boolean;
 }
 
 const WALK = 1.7, RUN = 3.6, GRAVITY = 9.8, JUMP = 3.6;
@@ -192,18 +194,24 @@ export class Game {
   private structOn = false;
   /** Materials made see-through while the frame is shown, with what to restore. */
   private ghost = new Map<THREE.Material, { transparent: boolean; opacity: number; depthWrite: boolean }>();
+  private pipesOn = false;
+  togglePipes = () => {
+    this.pipesOn = !this.pipesOn; if (this.pipesOn) this.structOn = false; this.applyStructure();
+    this.onToast(this.pipesOn ? 'Cấp thoát nước: xanh lạnh, đỏ nóng, nâu thoát xí, xám thoát sàn, xanh lá thông hơi' : 'Đã ẩn đường ống');
+  };
   toggleStructure = () => {
-    this.structOn = !this.structOn; this.applyStructure();
+    this.structOn = !this.structOn; if (this.structOn) this.pipesOn = false; this.applyStructure();
     this.onToast(this.structOn ? 'Kết cấu sơ bộ theo tường hiện tại — cần kỹ sư kết cấu tính toán lại' : 'Đã ẩn kết cấu');
   };
   /** Show the frame and ghost everything else in the house (walls, ground, furniture) so the buried parts show. */
   private applyStructure() {
-    const S = this.house.structure, on = this.structOn;
-    S.group.visible = on;
+    const S = this.house.structure, PG = this.house.pipes, on = this.structOn || this.pipesOn;
+    S.group.visible = this.structOn; PG.visible = this.pipesOn;
     if (on) {
+      this.ghost.forEach((v, mt) => { Object.assign(mt, v); mt.needsUpdate = true; }); this.ghost.clear();
       this.house.root.traverse(o => {
-        if (o === S.group || !(o as THREE.Mesh).material) return;
-        let p: THREE.Object3D | null = o; while (p && p !== S.group) p = p.parent; if (p) return;
+        if (!(o as THREE.Mesh).material) return;
+        let p: THREE.Object3D | null = o; while (p && p !== S.group && p !== PG) p = p.parent; if (p) return;
         for (const mt of [(o as THREE.Mesh).material].flat() as THREE.Material[]) {
           if (this.ghost.has(mt) || mt.blending === THREE.NoBlending) continue;
           this.ghost.set(mt, { transparent: mt.transparent, opacity: mt.opacity, depthWrite: mt.depthWrite });
@@ -225,14 +233,17 @@ export class Game {
   /** Render one view off-screen and return it as a PNG data URL. Orthographic views take the half extents of the
    *  frame in world metres; `clipY` cuts everything above that height (floor plans); `structure` shows the frame
    *  with the house ghosted. Labels, dimension overlays, the character and fog are hidden while rendering. */
-  snapshot(v: { pos: V3; target: V3; up?: V3; half?: [number, number]; fov?: number }, o: { w: number; h: number; roof: boolean; structure?: boolean; clipY?: number; labels?: boolean }): string {
+  snapshot(v: { pos: V3; target: V3; up?: V3; half?: [number, number]; fov?: number }, o: { w: number; h: number; roof: boolean; structure?: boolean; pipes?: boolean; clipY?: number; clip?: [number, number, number, number]; labels?: boolean }): string {
     const h = this.house, keep = { roof: h.roof.visible, labels: h.labels.map(s => s.visible), dims: this.dims.group.visible, hero: this.hero.root.visible,
-      shadow: this.hero.shadow.visible, marker: this.marker.visible, fog: this.scene.fog, bg: (this.scene.background as THREE.Color).clone(), struct: this.structOn, ratio: this.renderer.getPixelRatio() };
+      shadow: this.hero.shadow.visible, marker: this.marker.visible, fog: this.scene.fog, bg: (this.scene.background as THREE.Color).clone(), struct: this.structOn, pipes: this.pipesOn, ratio: this.renderer.getPixelRatio() };
     h.roof.visible = o.roof; h.labels.forEach(s => { s.visible = !!o.labels; }); this.dims.group.visible = false;
     this.hero.root.visible = this.hero.shadow.visible = this.marker.visible = false;
     this.scene.fog = null; (this.scene.background as THREE.Color).set(0xffffff);
-    if (!!o.structure !== this.structOn) { this.structOn = !!o.structure; this.applyStructure(); }
-    if (o.clipY !== undefined) this.renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), o.clipY)];
+    if (!!o.structure !== this.structOn || !!o.pipes !== this.pipesOn) { this.structOn = !!o.structure; this.pipesOn = !!o.pipes; this.applyStructure(); }
+    const planes: THREE.Plane[] = [];
+    if (o.clipY !== undefined) planes.push(new THREE.Plane(new THREE.Vector3(0, -1, 0), o.clipY));
+    if (o.clip) planes.push(new THREE.Plane(new THREE.Vector3(o.clip[0], o.clip[1], o.clip[2]), o.clip[3]));
+    this.renderer.clippingPlanes = planes;
     const cam = v.half ? new THREE.OrthographicCamera(-v.half[0], v.half[0], v.half[1], -v.half[1], 0.05, 80) : new THREE.PerspectiveCamera(v.fov ?? 35, o.w / o.h, 0.1, 200);
     cam.position.set(...v.pos); cam.up.set(...(v.up ?? [0, 1, 0])); cam.lookAt(...v.target); cam.updateProjectionMatrix();
     this.renderer.setPixelRatio(1); this.renderer.setSize(o.w, o.h, false);
@@ -242,7 +253,7 @@ export class Game {
     h.roof.visible = keep.roof; h.labels.forEach((s, i) => { s.visible = keep.labels[i]; }); this.dims.group.visible = keep.dims;
     this.hero.root.visible = keep.hero; this.hero.shadow.visible = keep.shadow; this.marker.visible = keep.marker;
     this.scene.fog = keep.fog; (this.scene.background as THREE.Color).copy(keep.bg);
-    if (keep.struct !== this.structOn) { this.structOn = keep.struct; this.applyStructure(); }
+    if (keep.struct !== this.structOn || keep.pipes !== this.pipesOn) { this.structOn = keep.struct; this.pipesOn = keep.pipes; this.applyStructure(); }
     this.renderer.setPixelRatio(keep.ratio); this.resize();
     return url;
   }
@@ -608,7 +619,7 @@ export class Game {
 
     let room: string | null = null, n: Interactable | null = null;
     if (this.mode === 'overview') {
-      h.roof.visible = this.roofOn && !this.structOn;
+      h.roof.visible = this.roofOn && !this.structOn && !this.pipesOn;
       h.labels.forEach(s => { s.visible = !this.roofOn && !this.dimsOn; });
       this.dims.group.visible = this.dimsOn && !this.roofOn;
       this.dims.rooms.forEach(g => { g.visible = true; }); this.dims.exterior.visible = true;
@@ -632,6 +643,7 @@ export class Game {
       room: room ?? (this.mode === 'tour' && this.p.z < -4.5 && this.p.z > -6.1 && this.p.x > -8.3 && this.p.x < this.map.mx(14.6) - 7 ? 'Lối đi bên hông' : 'Sân vườn'), prompt: this.mode === 'tour' ? this.promptFor(n) : null,
       firstPerson: this.firstPerson, aerial: this.aerial, roofMode: this.roofMode, lying: this.lying?.kind === 'lie', sitting: this.lying?.kind === 'sit',
       houseSize: `${fmtM(this.map.houseD)} × ${fmtM(this.map.houseW)} m`, lightsOn: this.lightsOn, tvOn: !!this.tv,
+      pipes: this.pipesOn,
       structure: this.structOn ? (({ columns, footings, groundBeam, tieBeam }) => ({ columns, footings, groundBeam: Math.round(groundBeam), tieBeam: Math.round(tieBeam) }))(h.structure) : null,
     };
     if (this.dims.group.visible) faceCamera(this.camera.getWorldDirection(new THREE.Vector3()));
