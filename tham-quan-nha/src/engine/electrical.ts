@@ -80,7 +80,7 @@ export const ELEC: ElecItem[] = [
   { kind: 'ac', room: 'Phòng ngủ 3', x: 13.8, z: 2.7, y: 2.85, n: '-x', circuit: 'C10', note: '9000 BTU, cuối giường' },
   { kind: 'acOut', room: 'Phòng ngủ 3', x: 14.0, z: 2.7, y: 2.3, n: '+x', circuit: 'C10', note: 'cục nóng, tường hồi tây' },
   // ---- Phòng thờ ----
-  SW('Phòng thờ', 2.4, 5.05, 1.25, '+z', 'C2', 'cạnh cửa'),
+  SW('Phòng thờ', 2.45, 5.05, 1.25, '+z', 'C2', 'cạnh lối vào, trên trụ vách gỗ'),
   SW('Phòng thờ', 0.2, 5.35, 1.25, '+x', 'C2', 'đầu phòng'),
   S('Phòng thờ', 2.55, 7.98, 1.3, '-x', 'C3', 'đèn thờ'), S('Phòng thờ', 0.2, 8.4, 0.4, '+x', 'C3'),
   // ---- Hành lang ----

@@ -3,9 +3,9 @@
 // canvas (so Vietnamese text renders with the system fonts) around off-screen renders from Game.snapshot, and the
 // sheets are packed as JPEG pages into a small hand-written PDF (no PDF library needed).
 import type { Game } from './Game';
-import { COLOR_SPECS, MAIN_SIDE, fmtM, type Dir } from './layout';
+import { COLOR_SPECS, MAIN_SIDE, THO_SCREEN, fmtM, type Dir } from './layout';
 import { CIRCUITS, ELEC, MAIN_BREAKER, type ElecKind } from './electrical';
-import { FLOOR_DRAINS, MANHOLES, PIPES, PIPE_STYLE, SEPTIC, SHAFT, type PipeKind } from './plumbing';
+import { FLOOR_DRAINS, MANHOLES, PIPES, PIPE_STYLE, SEPTIC, SHAFT, SOLAR, TANK, TAPS, VALVES, type PipeKind } from './plumbing';
 
 type V3 = [number, number, number];
 const PW = 2480, PH = 1754;                    // A3 landscape at 150 dpi
@@ -107,7 +107,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   const hz0 = Math.min(zA, zB), hz1 = Math.max(zA, zB);
   const E1 = 3.9, ridge = E1 + F.rise, size = `${fmtM(map.houseD)} × ${fmtM(map.houseW)}`;
   const date = new Date().toLocaleDateString('vi-VN');
-  const TOTAL = 18;
+  const TOTAL = 19;
 
   // ---------------- renders ----------------
   onProgress('Đang dựng hình phối cảnh…');
@@ -125,6 +125,11 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   await top('plan', { w: pf.W, h: pf.H, roof: false, clipY: 1.3 });
   await top('roof', { w: pf.W, h: pf.H, roof: true });
   await top('struct', { w: pf.W, h: pf.H, roof: false, structure: true });
+  // KT-10B: the WC block enlarged (plan coords -> world, so the mirror is followed)
+  const zb = { X: M + 40, Y: M + 120, W: 1350, H: PH - 2 * M - TB - 180 };
+  const zc0 = W(map.mx(10.5), map.mz(4.8)), zc1 = W(map.mx(14.2), map.mz(10.95));
+  const zf = fit(zb.X, zb.Y, zb.W, zb.H, (zc0[0] + zc1[0]) / 2, (zc0[1] + zc1[1]) / 2, Math.abs(zc1[0] - zc0[0]) / 2 + 0.3, Math.abs(zc1[1] - zc0[1]) / 2 + 0.3);
+  await snap('planWC', { pos: [zf.cx, 40, zf.cy], target: [zf.cx, 0, zf.cy], up: [0, 0, 1], half: [zf.hw, zf.hh] }, { w: zf.W, h: zf.H, roof: false, clipY: 1.3 });
 
   // elevations: orthographic, camera just outside the house on each side (inside the boundary wall)
   onProgress('Đang dựng các mặt đứng…');
@@ -212,19 +217,21 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     heading(g, 'DANH MỤC BẢN VẼ', x, y += 10);
     table(g, x, y + 30, [{ t: 'Ký hiệu', w: 150 }, { t: 'Tên bản vẽ', w: 680 }], [
       ['KT-00', 'Trang bìa & tổng quan'], ['KT-01', 'Mặt bằng bố trí & kích thước'], ['KT-01B', 'Mặt bằng 3D (bỏ mái)'], ['KT-02', 'Mặt đứng chính (Nam) & mặt đứng sau (Bắc)'],
-      ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-05B', 'Định vị cột C, dầm D'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-07', 'Thống kê nội thất'], ['KT-08', 'Sơ đồ đèn (chiếu sáng)'], ['KT-08B', 'Mặt bằng ổ cắm & điều hoà'], ['KT-09', 'Sơ đồ nguyên lý tủ điện & phụ tải'], ['KT-10', 'Cấp thoát nước & hộp kỹ thuật'], ['KT-11', 'Mặt cắt các phòng (1)'], ['KT-12', 'Mặt cắt các phòng (2)'], ['KT-13', 'Phối cảnh ngoại thất 3D'], ['KT-14', 'Phối cảnh nội thất 3D'],
+      ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-05B', 'Định vị cột C, dầm D'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-07', 'Thống kê nội thất'], ['KT-08', 'Sơ đồ đèn (chiếu sáng)'], ['KT-08B', 'Mặt bằng ổ cắm & điều hoà'], ['KT-09', 'Sơ đồ nguyên lý tủ điện & phụ tải'], ['KT-10', 'Cấp thoát nước & hộp kỹ thuật'], ['KT-10B', 'Chi tiết thoát sàn & cấp nóng khu WC'], ['KT-11', 'Mặt cắt các phòng (1)'], ['KT-12', 'Mặt cắt các phòng (2)'], ['KT-13', 'Phối cảnh ngoại thất 3D'], ['KT-14', 'Phối cảnh nội thất 3D'],
     ], 38, 20);
     pages.push(c);
   }
 
   // plan base shared by the floor plan and the electrical plan: cut walls, windows (glass lines), doors (swings)
   const planP = (x: number, z: number) => { const w = W(x, z); return topXY(pf, w[0], w[1]); };
-  const drawBase = (g: CanvasRenderingContext2D, tags: boolean) => {
-    const P = planP;
+  const drawBase = (g: CanvasRenderingContext2D, tags: boolean, P = planP) => {
     const poly = (pts: [number, number][], fill: string) => { g.fillStyle = fill; g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(...p) : g.moveTo(...p))); g.closePath(); g.fill(); };
     const rectE = (x0: number, z0: number, x1: number, z1: number, fill: string) => poly([P(x0, z0), P(x1, z0), P(x1, z1), P(x0, z1)], fill);
     // walls (cut) in dark grey, then openings cleared and drawn
     for (const w of d.walls) rectE(map.mx(w[0]), map.mz(w[1]), map.mx(w[2]), map.mz(w[3]), '#2b3038');
+    // ancestor room: wooden slatted partition (brown, dashed slats) with an open passage, no door
+    { const T = THO_SCREEN, zA = map.mz(T.z0 - 0.01), zB = map.mz(T.z1 + 0.01);
+      rectE(map.mx(T.x0), zA, map.mx(T.x1), zB, '#ffffff'); rectE(map.mx(T.x0), map.mz(T.z0 + 0.02), map.mx(T.open[0]), map.mz(T.z1 - 0.02), '#8a5a3c'); rectE(map.mx(T.open[1]), map.mz(T.z0 + 0.02), map.mx(T.x1), map.mz(T.z1 - 0.02), '#8a5a3c'); }
     g.lineWidth = 2;
     for (const w of map.windows) {
       if (w.hidden) continue; const r = w.rect, alongX = (r[2] - r[0]) > (r[3] - r[1]);
@@ -629,51 +636,124 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     pages.push(c);
   }
 
-  // ---------------- KT-10 water supply / drainage + technical shaft ----------------
-  {
-    const { c, g, top: t } = page('CẤP THOÁT NƯỚC', 'KT-10', pages.length + 1, TOTAL, date, size);
-    heading(g, 'MẶT BẰNG CẤP THOÁT NƯỚC & HỘP KỸ THUẬT', planBox.X, M + 70, 'Téc 1500 L trên mái bằng WC cấp tự chảy · ống cấp đi trên sàn gác WC (+2.62) và trong trần (+3.45) · ống thoát đi dưới nền (−0.30)');
-    g.globalAlpha = 0.22; g.drawImage(renders.plan, pf.X, pf.Y, pf.W, pf.H); g.globalAlpha = 1;
-    g.globalAlpha = 0.55; drawBase(g, false); g.globalAlpha = 1;
-    const P = planP, PP = (x: number, z: number) => P(map.mx(x), map.mz(z));
+  // ---------------- KT-10 / KT-10B water supply, drainage, solar + hot manifold, technical shaft ----------------
+  // One drawer for both sheets: PP maps DEFAULT plan coords to the page, k scales symbols and text.
+  const drawPlumb = (g: CanvasRenderingContext2D, PP: (x: number, z: number) => [number, number], k: number, detail: boolean) => {
     const rectP = (x0: number, z0: number, x1: number, z1: number) => { const a = PP(x0, z0), b = PP(x1, z1); return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])] as const; };
-    // tank outline (on the roof, dashed), septic tank, manholes, shaft
-    const tx0 = 11.43, tx1 = 13.19, tz0 = 6.98, tz1 = 8.12;
-    g.setLineDash([10, 6]); g.strokeStyle = ACC; g.lineWidth = 2; g.strokeRect(...rectP(tx0, tz0, tx1, tz1)); g.setLineDash([]);
-    
+    const F = (px: number, w = 700) => `${w} ${Math.round(px * k)}px ${FONT}`;
+    // roof equipment outlines (dashed): tank, solar heater
+    g.lineWidth = 2; g.setLineDash([10, 6]);
+    g.strokeStyle = ACC; g.strokeRect(...rectP(TANK.x0, TANK.z - 0.57, TANK.x1, TANK.z + 0.57));
+    g.strokeStyle = '#e08a1e'; g.strokeRect(...rectP(SOLAR.x0, SOLAR.z0, SOLAR.x1, SOLAR.z1)); g.setLineDash([]);
+    // wet-zone floor slopes towards the drains (KT-10B)
+    if (detail) {
+      const zones: { r: [number, number, number, number]; fd: number }[] = [
+        { r: [10.84, 7.53, 11.84, 8.78], fd: 0 }, { r: [10.84, 6.32, 12.44, 7.47], fd: 1 }, { r: [12.58, 6.32, 13.78, 8.78], fd: 2 }, { r: [10.82, 5.05, 13.8, 6.2], fd: 3 }];
+      for (const zn of zones) {
+        const f = FLOOR_DRAINS[zn.fd], [x0, z0, x1, z1] = zn.r;
+        g.fillStyle = 'rgba(47,127,216,.07)'; g.fillRect(...rectP(x0, z0, x1, z1));
+        for (const [cx, cz] of [[x0 + 0.15, z0 + 0.15], [x1 - 0.15, z0 + 0.15], [x1 - 0.15, z1 - 0.15], [x0 + 0.15, z1 - 0.15]] as [number, number][]) {
+          const a = PP(cx, cz), b = PP(cx + (f.x - cx) * 0.55, cz + (f.z - cz) * 0.55), ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+          if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 25) continue;
+          g.strokeStyle = '#2f7fd8'; g.lineWidth = 2; g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke();
+          g.fillStyle = '#2f7fd8'; g.beginPath(); g.moveTo(...b); g.lineTo(b[0] - 12 * Math.cos(ang - 0.4), b[1] - 12 * Math.sin(ang - 0.4)); g.lineTo(b[0] - 12 * Math.cos(ang + 0.4), b[1] - 12 * Math.sin(ang + 0.4)); g.closePath(); g.fill();
+        }
+        const [px, py] = PP(f.x, f.z); g.fillStyle = '#2f7fd8'; g.font = F(15, 700); g.fillText('i = 1 %', px + 14 * k, py + 26 * k);
+      }
+    }
+    // septic tank, manholes, shaft
     g.fillStyle = 'rgba(156,152,144,.35)'; g.strokeStyle = INK; g.lineWidth = 2; const sr = rectP(SEPTIC.x0, SEPTIC.z0, SEPTIC.x1, SEPTIC.z1); g.fillRect(...sr); g.strokeRect(...sr);
     for (const f of [1 / 3, 2 / 3]) { g.beginPath(); g.moveTo(sr[0] + sr[2] * f, sr[1]); g.lineTo(sr[0] + sr[2] * f, sr[1] + sr[3]); g.stroke(); }
-    g.fillStyle = INK; g.font = `700 16px ${FONT}`; g.textAlign = 'center'; g.fillText(SEPTIC.label, sr[0] + sr[2] / 2, sr[1] + sr[3] / 2 + 6); g.textAlign = 'left';
-    for (const h of MANHOLES) { const [x, y] = PP(h.x, h.z); g.fillStyle = '#fff'; g.strokeStyle = INK; g.fillRect(x - 14, y - 14, 28, 28); g.strokeRect(x - 14, y - 14, 28, 28); g.beginPath(); g.moveTo(x - 14, y - 14); g.lineTo(x + 14, y + 14); g.stroke(); g.fillStyle = INK; g.font = `700 16px ${FONT}`; g.fillText(h.label, x + 18, y + 6); }
+    g.fillStyle = INK; g.font = F(16); g.textAlign = 'center'; g.fillText(SEPTIC.label, sr[0] + sr[2] / 2, sr[1] + sr[3] / 2 + 6); g.textAlign = 'left';
+    for (const h of MANHOLES) { const [x, y] = PP(h.x, h.z), r = 14 * k; g.fillStyle = '#fff'; g.strokeStyle = INK; g.fillRect(x - r, y - r, 2 * r, 2 * r); g.strokeRect(x - r, y - r, 2 * r, 2 * r); g.beginPath(); g.moveTo(x - r, y - r); g.lineTo(x + r, y + r); g.stroke(); g.fillStyle = INK; g.font = F(16); g.fillText(h.label, x + r + 4, y + 6); }
     { const r = rectP(SHAFT.x0, SHAFT.z0, SHAFT.x1, SHAFT.z1); g.fillStyle = '#ffe9a8'; g.fillRect(...r); g.strokeStyle = INK; g.lineWidth = 2.5; g.strokeRect(...r);
       g.beginPath(); g.moveTo(r[0], r[1]); g.lineTo(r[0] + r[2], r[1] + r[3]); g.moveTo(r[0] + r[2], r[1]); g.lineTo(r[0], r[1] + r[3]); g.stroke(); }
-    // pipes (plan projection), drawn in order of depth: drains first, supply on top
-    const order: PipeKind[] = ['soil', 'waste', 'vent', 'cold', 'hot'];
-    for (const k of order) for (const pp of PIPES.filter(q => q.kind === k)) {
-      g.strokeStyle = PIPE_STYLE[k].css; g.lineWidth = k === 'soil' ? 6 : k === 'waste' || k === 'vent' ? 4.5 : 3.5; g.setLineDash(k === 'soil' || k === 'waste' ? [] : k === 'vent' ? [3, 4] : []);
-      g.beginPath(); pp.pts.forEach((q, i) => { const [x, y] = PP(q[0], q[2]); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
-      // risers / drops: a dot where the pipe changes level
-      for (let i = 0; i + 1 < pp.pts.length; i++) { const a = pp.pts[i], b = pp.pts[i + 1]; if (Math.abs(a[1] - b[1]) > 0.3 && Math.hypot(a[0] - b[0], a[2] - b[2]) < 0.05) { const [x, y] = PP(b[0], b[2]); g.fillStyle = PIPE_STYLE[k].css; g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.fill(); } }
+    // pipes (plan projection): drains first, supply on top; dots where a pipe changes level
+    for (const kd of ['soil', 'waste', 'vent', 'cold', 'hot'] as PipeKind[]) for (const pp of PIPES.filter(q => q.kind === kd)) {
+      g.strokeStyle = PIPE_STYLE[kd].css; g.lineWidth = (kd === 'soil' ? 6 : kd === 'waste' || kd === 'vent' ? 4.5 : 3.5) * Math.max(1, k * 0.8); g.setLineDash(kd === 'vent' ? [3, 4] : []);
+      g.beginPath(); pp.pts.forEach((q, i) => { const [x, y] = PP(q[0], q[2]); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke(); g.setLineDash([]);
+      for (let i = 0; i + 1 < pp.pts.length; i++) { const a = pp.pts[i], b = pp.pts[i + 1]; if (Math.abs(a[1] - b[1]) > 0.3 && Math.hypot(a[0] - b[0], a[2] - b[2]) < 0.05) { const [x, y] = PP(b[0], b[2]); g.fillStyle = PIPE_STYLE[kd].css; g.beginPath(); g.arc(x, y, 6 * k, 0, Math.PI * 2); g.fill(); } }
+      if (detail && pp.d) { // size label at the middle of the longest horizontal run
+        let best = -1, bl = 0; for (let i = 0; i + 1 < pp.pts.length; i++) { const a = pp.pts[i], b = pp.pts[i + 1], l = Math.hypot(a[0] - b[0], a[2] - b[2]); if (l > bl) { bl = l; best = i; } }
+        if (best >= 0 && bl > 0.5) { const a = pp.pts[best], b = pp.pts[best + 1], [x, y] = PP((a[0] + b[0]) / 2, (a[2] + b[2]) / 2); g.font = F(13, 700); const t2 = `Ø${pp.d}`, tw = g.measureText(t2).width + 8;
+          g.fillStyle = 'rgba(255,255,255,.9)'; g.fillRect(x - tw / 2, y - 22, tw, 18); g.fillStyle = PIPE_STYLE[kd].css; g.textAlign = 'center'; g.fillText(t2, x, y - 8); g.textAlign = 'left'; } }
     }
-    g.setLineDash([]);
-    for (const [x, z] of FLOOR_DRAINS) { const [px, py] = PP(x, z); g.fillStyle = '#fff'; g.strokeStyle = INK; g.lineWidth = 2; g.beginPath(); g.arc(px, py, 9, 0, Math.PI * 2); g.fill(); g.stroke(); g.beginPath(); g.moveTo(px - 6, py); g.lineTo(px + 6, py); g.moveTo(px, py - 6); g.lineTo(px, py + 6); g.stroke(); }
-    // fixture tags
-    const tags: [number, number, string][] = [[9.7, 1.62, 'Chậu bếp'], [10.95, 5.6, 'Lavabo'], [13.5, 5.46, 'Máy giặt'], [11.26, 6.85, 'Xí WC1'], [13.18, 8.45, 'Xí WC2'], [10.95, 8.2, 'Sen + NL 50 L (chung)'], [12.8, 6.9, 'Sen WC2'], [12.24, 8.58, 'HKT']];
+    // floor drains, valves, garden tap
+    for (const f of FLOOR_DRAINS) { const [px, py] = PP(f.x, f.z), r = 9 * k; g.fillStyle = '#fff'; g.strokeStyle = INK; g.lineWidth = 2; g.beginPath(); g.arc(px, py, r, 0, Math.PI * 2); g.fill(); g.stroke(); g.beginPath(); g.moveTo(px - r * 0.7, py); g.lineTo(px + r * 0.7, py); g.moveTo(px, py - r * 0.7); g.lineTo(px, py + r * 0.7); g.stroke();
+      if (detail) { g.fillStyle = INK; g.font = F(14, 600); g.fillText('PT ' + f.label, px + r + 4, py - 6); } }
+    const bow = (x: number, y: number, col: string) => { const r = 10 * k; g.fillStyle = col; g.strokeStyle = INK; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x - r, y - r * 0.7); g.lineTo(x + r, y + r * 0.7); g.lineTo(x + r, y - r * 0.7); g.lineTo(x - r, y + r * 0.7); g.closePath(); g.fill(); g.stroke(); };
+    for (const v of VALVES) { const [x, y] = PP(v.x, v.z); bow(x, y, '#d23a2a'); g.fillStyle = '#b02a1a'; g.font = F(15); g.fillText(v.label.split(' ')[0], x - 10 * k, y - 14 * k); }
+    for (const t of TAPS) { const [x, y] = PP(t.x, t.z); bow(x, y, '#2f7fd8'); g.fillStyle = INK; g.font = F(15); g.fillText(t.label, x + 14 * k, y + 22 * k); }
+  };
+  {
+    const { c, g, top: t } = page('CẤP THOÁT NƯỚC', 'KT-10', pages.length + 1, TOTAL, date, size);
+    heading(g, 'MẶT BẰNG CẤP THOÁT NƯỚC & HỘP KỸ THUẬT', planBox.X, M + 70, 'Téc 1500 L + bình năng lượng mặt trời trên mái bằng WC · ống cấp trên sàn gác WC (+2.62) và trong trần (+3.45) · ống thoát dưới nền (−0.30)');
+    g.globalAlpha = 0.22; g.drawImage(renders.plan, pf.X, pf.Y, pf.W, pf.H); g.globalAlpha = 1;
+    g.globalAlpha = 0.55; drawBase(g, false); g.globalAlpha = 1;
+    const PP = (x: number, z: number) => planP(map.mx(x), map.mz(z));
+    drawPlumb(g, PP, 1, false);
+    const tags: [number, number, string][] = [[9.7, 1.62, 'Chậu rửa bát (nóng + lạnh)'], [10.95, 5.45, 'Lavabo'], [13.5, 5.46, 'Máy giặt'], [11.26, 6.85, 'Xí WC1'], [13.18, 8.45, 'Xí WC2'], [10.95, 8.2, 'NL điện 50 L'], [12.24, 8.58, 'HKT']];
     g.font = `700 15px ${FONT}`;
     for (const [x, z, s2] of tags) { const [px, py] = PP(x, z), tw = g.measureText(s2).width + 10; g.fillStyle = 'rgba(255,255,255,.9)'; g.fillRect(px + 8, py - 30, tw, 22); g.fillStyle = INK; g.fillText(s2, px + 13, py - 13); }
     // right column: legend, 3D, notes
     const lx = planBox.X + planBox.W + 60, lw = PW - M - 30 - lx; let ly = t + 40;
-    heading(g, 'KÝ HIỆU', lx, ly); ly += 14;
-    for (const k of ['cold', 'hot', 'soil', 'waste', 'vent'] as PipeKind[]) { ly += 34; g.strokeStyle = PIPE_STYLE[k].css; g.lineWidth = 5; g.setLineDash(k === 'vent' ? [3, 4] : []); g.beginPath(); g.moveTo(lx, ly - 6); g.lineTo(lx + 52, ly - 6); g.stroke(); g.setLineDash([]);
-      g.fillStyle = INK; g.font = `600 18px ${FONT}`; g.fillText(PIPE_STYLE[k].name, lx + 66, ly); g.fillStyle = SOFT; g.font = `400 16px ${FONT}`; g.fillText(PIPE_STYLE[k].spec, lx + 340, ly, lw - 340); }
-    ly += 34; g.fillStyle = '#ffe9a8'; g.fillRect(lx + 10, ly - 20, 32, 22); g.strokeStyle = INK; g.lineWidth = 2; g.strokeRect(lx + 10, ly - 20, 32, 22); g.fillStyle = INK; g.font = `600 18px ${FONT}`; g.fillText(SHAFT.label + ' (góc WC1, cao tới trần bê tông, có nắp thăm)', lx + 66, ly, lw - 66);
-    ly += 34; g.setLineDash([10, 6]); g.strokeStyle = ACC; g.strokeRect(lx + 10, ly - 20, 32, 22); g.setLineDash([]); g.fillStyle = INK; g.fillText('Téc inox 1500 L đặt trên mái bằng khu WC', lx + 66, ly, lw - 66);
-    ly += 30; g.fillText('●  Ống đứng (lên / xuống)    ⊕  Phễu thu sàn    ⊠  Hố ga', lx + 10, ly);
-    ly += 24; const img = renders.pipes3d, iw = lw, ih = iw * img.height / img.width; g.drawImage(img, lx, ly, iw, ih); g.strokeStyle = LINE; g.lineWidth = 1.5; g.strokeRect(lx, ly, iw, ih); ly += ih + 34;
-    heading(g, 'GHI CHÚ', lx, ly); g.fillStyle = SOFT; g.font = `400 17px ${FONT}`; ly += 10;
-    ['Téc đặt trên mái bằng (đáy +4.14): áp lực tự chảy ~1.5 m cột nước; nếu sen yếu lắp bơm tăng áp sau téc.', 'Ống cấp PPR hàn nhiệt, thử áp 10 bar trước khi trát; ống nóng PN20 bọc cách nhiệt.',
-      'Ống thoát dưới nền dốc ≥ 2 %; xí đi riêng vào bể phốt, nước sàn và bếp đi hố ga.', 'Ống thông hơi Ø60 đi trong hộp kỹ thuật, lên trên mái bằng 0.6 m.', 'Nước ngưng điều hoà dẫn ra ngoài tường hậu / hồi tây.',
-      'Vị trí ống sơ bộ — đội thi công điện nước cần đo lại tại hiện trường.'].forEach(l2 => { ly += 26; g.fillText('• ' + l2, lx, ly, lw); });
+    heading(g, 'KÝ HIỆU', lx, ly); ly += 10;
+    for (const kd of ['cold', 'hot', 'soil', 'waste', 'vent'] as PipeKind[]) { ly += 32; g.strokeStyle = PIPE_STYLE[kd].css; g.lineWidth = 5; g.setLineDash(kd === 'vent' ? [3, 4] : []); g.beginPath(); g.moveTo(lx, ly - 6); g.lineTo(lx + 52, ly - 6); g.stroke(); g.setLineDash([]);
+      g.fillStyle = INK; g.font = `600 17px ${FONT}`; g.fillText(PIPE_STYLE[kd].name, lx + 66, ly, 300); g.fillStyle = SOFT; g.font = `400 15px ${FONT}`; g.fillText(PIPE_STYLE[kd].spec, lx + 370, ly, lw - 370); }
+    const keyBox = (draw: () => void, s2: string) => { ly += 32; draw(); g.fillStyle = INK; g.font = `600 17px ${FONT}`; g.fillText(s2, lx + 66, ly, lw - 66); };
+    keyBox(() => { g.setLineDash([10, 6]); g.strokeStyle = ACC; g.lineWidth = 2; g.strokeRect(lx + 10, ly - 20, 32, 22); g.setLineDash([]); }, TANK.label);
+    keyBox(() => { g.setLineDash([10, 6]); g.strokeStyle = '#e08a1e'; g.lineWidth = 2; g.strokeRect(lx + 10, ly - 20, 32, 22); g.setLineDash([]); }, SOLAR.label);
+    keyBox(() => { g.fillStyle = '#ffe9a8'; g.fillRect(lx + 10, ly - 20, 32, 22); g.strokeStyle = INK; g.lineWidth = 2; g.strokeRect(lx + 10, ly - 20, 32, 22); }, SHAFT.label + ' (góc WC1, có nắp thăm)');
+    keyBox(() => { g.fillStyle = '#d23a2a'; g.beginPath(); g.moveTo(lx + 14, ly - 16); g.lineTo(lx + 38, ly - 2); g.lineTo(lx + 38, ly - 16); g.lineTo(lx + 14, ly - 2); g.closePath(); g.fill(); }, 'V1 van nóng NLMT · V2 van nóng bình điện (sau cửa thăm gác)');
+    ly += 30; g.fillStyle = INK; g.font = `600 17px ${FONT}`; g.fillText('●  Ống đứng    ⊕  Phễu thu sàn (có bẫy mùi)    ⊠  Hố ga', lx + 10, ly);
+    ly += 20; const img = renders.pipes3d, iw = lw, ih = iw * img.height / img.width; g.drawImage(img, lx, ly, iw, ih); g.strokeStyle = LINE; g.lineWidth = 1.5; g.strokeRect(lx, ly, iw, ih); ly += ih + 30;
+    heading(g, 'GHI CHÚ', lx, ly); g.fillStyle = SOFT; g.font = `400 16px ${FONT}`; ly += 6;
+    ['Nước nóng: mở V1 đóng V2 dùng năng lượng mặt trời; trời âm u mở V2 đóng V1 dùng bình điện.', 'Nước nóng cấp cho 2 sen, lavabo và chậu rửa bát; ống nóng bọc cách nhiệt.',
+      'Téc trên chân cao 1.55 m (đáy +5.45), cao hơn bình NLMT để cấp tự chảy; áp sen ~3.5 m cột nước, yếu thì lắp bơm tăng áp.',
+      'Vòi tưới cây ở tường hậu sau WC1, cao 0.6 m.', 'Ống thoát dưới nền dốc ≥ 2 %; xí vào bể phốt, nước sàn và bếp vào hố ga. Chi tiết khu WC: KT-10B.',
+      'Vị trí ống sơ bộ — đội thi công cần đo lại tại hiện trường.'].forEach(l2 => { ly += 25; g.fillText('• ' + l2, lx, ly, lw); });
+    pages.push(c);
+  }
+  {
+    const { c, g, top: t } = page('CHI TIẾT THOÁT SÀN KHU WC', 'KT-10B', pages.length + 1, TOTAL, date, size);
+    heading(g, 'KHU WC, LAVABO — THOÁT SÀN, CẤP NÓNG & VAN', zb.X, M + 70, 'Phóng to mặt bằng · mũi tên: hướng dốc sàn về phễu thu · số Ø: đường kính ống (mm)');
+    g.globalAlpha = 0.3; g.drawImage(renders.planWC, zf.X, zf.Y, zf.W, zf.H); g.globalAlpha = 1;
+    const ZP = (x: number, z: number) => { const w = W(x, z); return topXY(zf, w[0], w[1]); };
+    g.save(); g.beginPath(); g.rect(zf.X, zf.Y, zf.W, zf.H); g.clip();
+    g.globalAlpha = 0.6; drawBase(g, false, ZP); g.globalAlpha = 1;
+    drawPlumb(g, (x, z) => ZP(map.mx(x), map.mz(z)), 1.5, true);
+    g.restore(); g.strokeStyle = LINE; g.lineWidth = 1.5; g.strokeRect(zf.X, zf.Y, zf.W, zf.H);
+    // right: floor-drain detail (schematic section) + table + notes
+    const lx = zb.X + zb.W + 60, lw = PW - M - 30 - lx; let ly = t + 40;
+    heading(g, 'CHI TIẾT PHỄU THU SÀN (MẶT CẮT)', lx, ly); ly += 30;
+    { // schematic section: drawing on the left 55 %, labels in a column on the right with leader lines
+      const X0 = lx + 10, Wd = Math.round(lw * 0.55), Y0 = ly + 30, cx = X0 + Wd / 2, dw = 44;
+      const band = (y0: number, y1: number, col: string, slope: number) => { // a layer sloping down towards the drain
+        g.fillStyle = col; for (const side of [-1, 1]) { const xa = side < 0 ? X0 : cx + dw, xb = side < 0 ? cx - dw : X0 + Wd, ya = side < 0 ? slope : 0, yb = side < 0 ? 0 : slope;
+          g.beginPath(); g.moveTo(xa, Y0 + y0 - ya); g.lineTo(xb, Y0 + y0 - yb); g.lineTo(xb, Y0 + y1 - yb); g.lineTo(xa, Y0 + y1 - ya); g.closePath(); g.fill(); } };
+      band(0, 12, '#d9dee2', 10); band(12, 58, '#c9bfae', 10); band(58, 64, '#2f7fd8', 0); band(64, 150, '#a8a49c', 0);
+      // drain body + grate, trap, outlet pipe
+      g.fillStyle = '#6f767d'; g.fillRect(cx - dw - 8, Y0 - 3, 2 * dw + 16, 8); g.fillStyle = '#5f666d'; g.fillRect(cx - dw + 6, Y0 + 5, 2 * dw - 12, 80);
+      g.strokeStyle = '#5f666d'; g.lineWidth = 16; g.lineCap = 'round'; g.beginPath(); g.moveTo(cx, Y0 + 84); g.lineTo(cx, Y0 + 190); g.quadraticCurveTo(cx, Y0 + 232, cx + 40, Y0 + 232); g.quadraticCurveTo(cx + 80, Y0 + 232, cx + 80, Y0 + 195); g.stroke();
+      g.strokeStyle = '#7d8790'; g.lineWidth = 18; g.beginPath(); g.moveTo(cx + 80, Y0 + 198); g.lineTo(X0 + Wd, Y0 + 212); g.stroke(); g.lineCap = 'butt';
+      const LX = X0 + Wd + 30; let k2 = 0;
+      const lbl = (x: number, y: number, s3: string) => { const ty = Y0 - 10 + k2 * 40; k2++; g.strokeStyle = INK; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x, y); g.lineTo(LX - 6, ty); g.stroke();
+        g.fillStyle = INK; g.beginPath(); g.arc(x, y, 3, 0, Math.PI * 2); g.fill(); g.font = `600 15px ${FONT}`; g.fillText(s3, LX, ty + 5, PW - M - 30 - LX); };
+      lbl(cx + dw, Y0, 'Phễu thu inox Ø90 có lưới');
+      lbl(X0 + 60, Y0 + 2, 'Gạch chống trơn, dốc 1 % về phễu');
+      lbl(X0 + 100, Y0 + 34, 'Vữa tạo dốc M75, dày 30–50');
+      lbl(X0 + Wd - 60, Y0 + 61, 'Chống thấm, bẻ lên tường 300 (sen 1800)');
+      lbl(X0 + Wd - 90, Y0 + 110, 'Sàn BTCT / nền bê tông');
+      lbl(cx + 40, Y0 + 232, 'Bẫy mùi (con thỏ) Ø60');
+      lbl(X0 + Wd - 30, Y0 + 210, 'Ống uPVC Ø60 → ống gom Ø75, dốc 2 %');
+      ly = Y0 + 305; }
+    heading(g, 'PHỄU THU SÀN', lx, ly);
+    ly = table(g, lx, ly + 24, [{ t: 'Vị trí', w: 200 }, { t: 'Thu nước từ', w: 380 }, { t: 'Ống ra', w: 120 }], [
+      ['WC1 khu tắm', 'sen đứng, vách kính', 'Ø60'], ['WC1 khu khô', 'sàn quanh bồn cầu, cửa', 'Ø60'], ['WC2', 'sen + sàn (WC hẹp 1.2 m)', 'Ø60'], ['Lavabo', 'sàn trước lavabo, máy giặt tràn', 'Ø60'],
+    ], 32, 16) + 34;
+    heading(g, 'GHI CHÚ', lx, ly); g.fillStyle = SOFT; g.font = `400 16px ${FONT}`; ly += 6;
+    ['Sàn WC hạ 30 mm so với sàn nhà, có gờ chặn nước ở cửa.', 'Mỗi phễu thu có bẫy mùi; ống gom Ø75 chạy dưới khu Lavabo về hố ga HG1.', 'Xí đi ống Ø90 riêng vào bể phốt, không chung với ống thoát sàn.',
+      'Van V1 / V2 đặt ngay sau cửa thăm gác (phía Lavabo, trên cửa WC1) để thao tác.', 'Thử kín nước chống thấm 24 h trước khi lát gạch.'].forEach(l2 => { ly += 25; g.fillText('• ' + l2, lx, ly, lw); });
     pages.push(c);
   }
 
@@ -694,7 +774,10 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       const onCut = (a0: number, a1: number) => S2.alongX ? a0 <= S2.zc + 1e-6 && a1 >= S2.zc - 1e-6 : a0 <= S2.xc + 1e-6 && a1 >= S2.xc - 1e-6;
       const uR = (ex0: number, ez0: number, ex1: number, ez1: number): [number, number] => S2.alongX ? [ex0 - 7, ex1 - 7] : [S2.u(S2.xc, ez0), S2.u(S2.xc, ez1)];
       for (const w of d.walls) { const ex0 = map.mx(w[0]), ez0 = map.mz(w[1]), ex1 = map.mx(w[2]), ez1 = map.mz(w[3]);
-        if (!(S2.alongX ? onCut(ez0, ez1) : onCut(ex0, ex1))) continue; const [p, q] = uR(ex0, ez0, ex1, ez1); fillU(p, q, 0, w[0] === 12.46 && w[2] === 12.56 ? 2.5 : E1, '#2b3038'); }
+        if (!(S2.alongX ? onCut(ez0, ez1) : onCut(ex0, ex1))) continue; const [p, q] = uR(ex0, ez0, ex1, ez1);
+        const T = THO_SCREEN, wood = w[0] === 0 && w[1] === 4.95 && w[2] === 11.45 && !S2.alongX && S2.xc > map.mx(T.x0) && S2.xc < map.mx(T.x1);
+        if (wood) { const open = S2.xc > map.mx(T.open[0]) && S2.xc < map.mx(T.open[1]); fillU(p, q, T.top, E1, '#2b3038'); fillU(p, q, open ? T.openH : 0, T.top, '#8a5a3c'); continue; }
+        fillU(p, q, 0, w[0] === 12.46 && w[2] === 12.56 ? 2.5 : E1, '#2b3038'); }
       for (const w of map.windows) { if (w.hidden) continue; const r = w.rect, ex0 = map.mx(r[0]), ez0 = map.mz(r[1]), ex1 = map.mx(r[2]), ez1 = map.mz(r[3]);
         if (!(S2.alongX ? onCut(ez0, ez1) && ex1 - ex0 < 0.4 : onCut(ex0, ex1) && ez1 - ez0 < 0.4)) continue; const [p, q] = uR(ex0, ez0, ex1, ez1);
         fillU(p, q, w.sill, w.sill + w.h, '#ffffff'); g.strokeStyle = ACC; g.lineWidth = 2; for (const f of [0.35, 0.65]) { const uu = p + (q - p) * f; g.beginPath(); g.moveTo(PX(uu), PY(w.sill)); g.lineTo(PX(uu), PY(w.sill + w.h)); g.stroke(); } }

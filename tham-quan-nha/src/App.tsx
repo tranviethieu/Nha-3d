@@ -160,7 +160,7 @@ export default function App() {
               <ul>
                 {Object.values(PIPE_STYLE).map(p => <li key={p.name}><span className="sw" style={{ background: p.css }} />{p.name} · {p.spec}</li>)}
               </ul>
-              <p>Téc 1500 L trên mái bằng WC cấp tự chảy; ống chính đi trên sàn gác WC và trong trần thạch cao ra bếp. Ống đứng thông hơi trong hộp kỹ thuật góc WC1. Xí vào bể phốt sau nhà, nước sàn vào hố ga HG1, chậu bếp ra HG2 rồi ra mương.</p>
+              <p>Téc 1500 L (chân cao) và bình năng lượng mặt trời trên mái bằng WC. Nước nóng lấy từ NLMT (van V1) hoặc bình điện 50 L ở WC1 (van V2), cấp 2 sen, lavabo, chậu rửa bát. Mỗi khu ướt có phễu thu sàn + bẫy mùi, gom về hố ga HG1; xí vào bể phốt. Vòi tưới cây ở tường hậu.</p>
             </div>
           )}
           {hud?.structure && (

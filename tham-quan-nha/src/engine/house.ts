@@ -3,8 +3,8 @@
 // they subtract (7, 4.5) so the house is centered on the world origin.
 import * as THREE from 'three';
 import { ELEC } from './electrical';
-import { PIPES, PIPE_STYLE, SHAFT, FLOOR_DRAINS, SEPTIC, MANHOLES } from './plumbing';
-import { LIGHT_SPACING, MAIN_SIDE, MAIN_TRANSOM, PlanMap, ROOM_DIMS, emptyLayout, type Layout } from './layout';
+import { PIPES, PIPE_STYLE, SHAFT, FLOOR_DRAINS, SEPTIC, MANHOLES, VALVES, TAPS, TANK, SOLAR } from './plumbing';
+import { LIGHT_SPACING, MAIN_SIDE, MAIN_TRANSOM, PlanMap, ROOM_DIMS, THO_SCREEN, emptyLayout, type Layout } from './layout';
 
 export type Dir = '+x' | '-x' | '+z' | '-z';
 /** Axis-aligned box in WORLD coordinates. */
@@ -226,7 +226,20 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   // WALLS (keep WALL_RIGID_X / Z in layout.ts in sync): continuous walls; doors and windows are cut out as holes
   const WALLS=[[1.0,0,14,0.2],[1.0,0.2,1.2,4.95],[0,4.95,11.45,5.05],[13.2,4.95,14,5.05],[0,5.05,0.2,9],[0.2,8.8,13.8,9],[13.8,0,14,9],[9.95,0.2,10.05,3.95],[9.95,3.95,13.8,4.05],[2.55,5.05,2.65,8.8],[6.4,5.05,6.5,8.8],[10.72,5.05,10.82,8.8],[10.82,6.2,13.8,6.3],[12.46,6.3,12.56,8.8]];
   // the WC1 / WC2 partition stops at the top of the WC slab (+2.5): the storage loft above runs across both WCs
-  WALLS.forEach(w=>wallWithHoles(w,0,w[0]===12.46&&w[2]===12.56?2.5:H,wallMat,true));
+  // The ancestor room has no door: the middle wall between it and the living room (THO_SCREEN) is a wooden slatted
+  // partition (vách gỗ nan) up to the ceiling with an open 0.8 m passage; only the strip above the ceiling is masonry.
+  const isSpine=(w:number[])=>w[0]===0&&w[1]===4.95&&w[2]===11.45;
+  WALLS.forEach(w=>{
+    if(isSpine(w)){const T=THO_SCREEN;wallWithHoles([0,4.95,T.x0,5.05],0,H,wallMat,true);wallWithHoles([T.x0,4.95,T.x1,5.05],T.top,H,wallMat,true);wallWithHoles([T.x1,4.95,11.45,5.05],0,H,wallMat,true);return;}
+    wallWithHoles(w,0,w[0]===12.46&&w[2]===12.56?2.5:H,wallMat,true);});
+  {const T=THO_SCREEN,wood=M(0x6b4430),z0=4.975,z1=5.025,[o0,o1]=T.open,oh=T.openH;
+    box(T.x0,z0,T.x1,z1,T.top-0.08,T.top,wood,false);                                                     // top rail
+    box(T.x0,z0,o0,z1,0,0.08,wood,false);box(o1,z0,T.x1,z1,0,0.08,wood,false);                          // bottom rails
+    box(T.x0,4.96,T.x0+0.05,5.04,0,T.top,wood,false);box(T.x1-0.05,4.96,T.x1,5.04,0,T.top,wood,false);  // end posts
+    box(o0-0.05,4.96,o0,5.04,0,T.top,wood,false);box(o1,4.96,o1+0.05,5.04,0,T.top,wood,false);          // jambs of the passage
+    box(o0,z0,o1,z1,oh,oh+0.08,wood,false);                                                               // lintel rail over it
+    for(let x=T.x0+0.1;x<T.x1-0.06;x+=0.1){const inOpen=x>o0-0.05&&x<o1+0.05;if(Math.abs(x-o0)<0.07||Math.abs(x-o1)<0.07)continue;
+      box(x-0.02,4.985,x+0.02,5.015,inOpen?oh+0.08:0.08,T.top-0.08,wood,false);}}
   const wcTile=M(0xe9ecee);
   [[10.82,6.3,10.84,8.8],[12.44,6.3,12.46,8.8],[12.56,6.3,12.58,8.8],[13.78,6.3,13.8,8.8],[10.84,6.3,12.44,6.32],[12.58,6.3,13.78,6.32],[10.84,8.78,12.44,8.8],[12.58,8.78,13.78,8.8]].forEach(w=>wallWithHoles(w,0,2.4,wcTile,false));
   // Mouldings (as in the client's reference photo), 4 cm proud of the outside wall faces and cut around doors /
@@ -634,18 +647,33 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
       const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.computeVertexNormals();
       roofG.add(new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:map.color('wall'),roughness:0.85,side:THREE.DoubleSide})));};
     gable(true);gable(false);
-    // the tank, centred over the WC block, lying along x
-    const tx=(mx(10.82)+mx(13.8))/2-7,tz=(mz(6.3)+mz(8.8))/2-4.5,R=0.57,TL=1.75,cy=E1+1.365-R;
+    // the tank (over the WC block, lying along x) on a 1.55 m steel stand, so it sits above the solar heater it feeds
+    const tx=(mx(TANK.x0)+mx(TANK.x1))/2-7,tz=mz(TANK.z)-4.5,R=0.57,TL=1.75,cy=TANK.bottom+R;
     const inox=new THREE.MeshStandardMaterial({color:0xe8ebee,roughness:0.3,metalness:0.35}); // no env map: keep it light
     const body=new THREE.Mesh(new THREE.CylinderGeometry(R,R,TL,32),inox);body.rotation.z=Math.PI/2;body.position.set(tx,cy,tz);roofG.add(body);
     for(const sx of [-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(R,32,16,0,Math.PI*2,0,Math.PI/2),inox);e.scale.set(1,0.18,1);
       e.rotation.z=-sx*Math.PI/2;e.position.set(tx+sx*TL/2,cy,tz);roofG.add(e);
       for(const b of [-0.5,0.5]){const r=new THREE.Mesh(new THREE.TorusGeometry(R+0.005,0.012,6,40),inox);r.rotation.y=Math.PI/2;r.position.set(tx+sx*TL*0.33+b*0.05,cy,tz);roofG.add(r);}}
     const lid=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.08,24),inox);lid.position.set(tx,cy+R+0.02,tz);roofG.add(lid);
-    const stand=M(0x8d9399);
-    for(const sx of [-0.6,0,0.6]){box(tx+sx-0.04+7,tz-0.61+4.5,tx+sx+0.04+7,tz+0.61+4.5,E1,E1+0.24,stand,true,null,roofG);}
-    box(tx-0.9+7,tz-0.61+4.5,tx+0.9+7,tz-0.55+4.5,E1+0.18,E1+0.24,stand,false,null,roofG);box(tx-0.9+7,tz+0.55+4.5,tx+0.9+7,tz+0.61+4.5,E1+0.18,E1+0.24,stand,false,null,roofG);
-    const pipe=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,cy-R-E1+0.05,10),M(0xe9e9e9));pipe.position.set(tx+0.4,(cy-R+E1)/2,tz);roofG.add(pipe);
+    const stand=M(0x8d9399),TB=TANK.bottom;
+    for(const sx of [-0.8,0.8])for(const sz of [-0.55,0.55])box(tx+sx-0.03+7,tz+sz-0.03+4.5,tx+sx+0.03+7,tz+sz+0.03+4.5,E1,TB,stand,true,null,roofG);
+    for(const sz of [-0.55,0.55]){box(tx-0.83+7,tz+sz-0.03+4.5,tx+0.83+7,tz+sz+0.03+4.5,TB-0.06,TB,stand,false,null,roofG);box(tx-0.83+7,tz+sz-0.02+4.5,tx+0.83+7,tz+sz+0.02+4.5,E1+0.5,E1+0.54,stand,false,null,roofG);}
+    for(const sx of [-0.8,0,0.8])box(tx+sx-0.03+7,tz-0.58+4.5,tx+sx+0.03+7,tz+0.58+4.5,TB-0.06,TB,stand,false,null,roofG);
+    const pipeM=M(0xe9e9e9),dp=(x:number,y0:number,y1:number,z:number)=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,y1-y0,10),pipeM);p.position.set(x,(y0+y1)/2,z);roofG.add(p);};
+    dp(mx(12.91)-7,E1,TB,tz);dp(mx(11.55)-7,4.75,TB,tz);
+    // solar water heater (bình năng lượng mặt trời): horizontal inox tank on top, a row of vacuum tubes sloping down
+    // towards the south, steel frame. Its tank top stays below the main tank's bottom (gravity feed).
+    {const sx0=mx(SOLAR.x0)-7,sx1=mx(SOLAR.x1)-7,scx=(sx0+sx1)/2,sL=sx1-sx0,stz=mz(SOLAR.tankZ)-4.5,sty=SOLAR.tankY,sR=0.235;
+      const st=new THREE.Mesh(new THREE.CylinderGeometry(sR,sR,sL,28),inox);st.rotation.z=Math.PI/2;st.position.set(scx,sty,stz);roofG.add(st);
+      for(const e of [-1,1]){const c=new THREE.Mesh(new THREE.CylinderGeometry(sR+0.01,sR+0.01,0.03,28),M(0x9aa1a8));c.rotation.z=Math.PI/2;c.position.set(scx+e*sL/2,sty,stz);roofG.add(c);}
+      const fz=mz(SOLAR.z0)-4.5,fy=E1+0.35,tubeM=new THREE.MeshStandardMaterial({color:0x1b2a3a,roughness:0.15,metalness:0.5});
+      const a=new THREE.Vector3(0,sty-0.12,stz-0.12),b=new THREE.Vector3(0,fy,fz),L=a.distanceTo(b),q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());
+      const n=18;for(let i=0;i<n;i++){const x=sx0+0.08+(sL-0.16)*i/(n-1),t=new THREE.Mesh(new THREE.CylinderGeometry(0.029,0.029,L,12),tubeM);
+        t.position.set(x,(a.y+b.y)/2,(a.z+b.z)/2);t.quaternion.copy(q);roofG.add(t);}
+      const rail=(y:number,z:number)=>box(sx0+7,z-0.025+4.5,sx1+7,z+0.025+4.5,y-0.025,y+0.025,stand,false,null,roofG);
+      rail(fy-0.04,fz);rail(sty-0.3,stz);
+      for(const x of [sx0+0.05,sx1-0.05]){box(x-0.02+7,fz-0.02+4.5,x+0.02+7,fz+0.02+4.5,E1,fy,stand,false,null,roofG);box(x-0.02+7,stz-0.02+4.5,x+0.02+7,stz+0.02+4.5,E1,sty-0.2,stand,false,null,roofG);}
+      dp(mx(13.15)-7,E1,sty-sR,stz);}
     noMap=false;}
   {// sub-roof fascia + soffits (porch ceiling), in edited coords like the main roof's
     const wx=mx(1.0),hz0=mz(0),hz9=mz(4.95);noMap=true;
@@ -892,11 +920,21 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const g=new THREE.Mesh(new THREE.BoxGeometry(mx(SEPTIC.x1)-mx(SEPTIC.x0),SEPTIC.depth,Math.abs(mz(SEPTIC.z1)-mz(SEPTIC.z0))),conc);
     g.position.set((mx(SEPTIC.x0)+mx(SEPTIC.x1))/2-7,-0.3-SEPTIC.depth/2,(mz(SEPTIC.z0)+mz(SEPTIC.z1))/2-4.5);pipeG.add(g);
     for(const h of MANHOLES){const m=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.5),conc);m.position.set(mx(h.x)-7,-0.35,mz(h.z)-4.5);pipeG.add(m);}
-    const cap=new THREE.Mesh(new THREE.ConeGeometry(0.07,0.1,12),mats.vent);cap.position.set(mx(12.24)-7,4.6,mz(8.58)-4.5);pipeG.add(cap);
+    const vpts=PIPES.find(q=>q.kind==='vent')!.pts,vp=vpts[vpts.length-1];
+    const cap=new THREE.Mesh(new THREE.ConeGeometry(0.07,0.1,12),mats.vent);cap.position.set(mx(vp[0])-7,vp[1]+0.05,mz(vp[2])-4.5);pipeG.add(cap);
+    // odour traps under the floor drains, ball valves (red lever) on the two hot sources, the garden tap
+    const trapM=M(0x5f666d),red=M(0xd23a2a),brass=new THREE.MeshStandardMaterial({color:0xc9a23a,roughness:0.35,metalness:0.6});
+    for(const f of FLOOR_DRAINS){const t=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.055,0.12,14),trapM);t.position.set(mx(f.x)-7,-0.07,mz(f.z)-4.5);pipeG.add(t);}
+    for(const v of VALVES){const g2=new THREE.Group();g2.position.set(mx(v.x)-7,v.y,mz(v.z)-4.5);pipeG.add(g2);
+      const bd=new THREE.Mesh(new THREE.SphereGeometry(0.045,14,10),brass);g2.add(bd);const lv=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.02,0.16),red);lv.position.set(0,0.06,0.04);g2.add(lv);}
     // technical shaft (tiled box, access panel facing the room) and floor drain grates
     const shaftMat=M(0xdfe3e6);box(SHAFT.x0,SHAFT.z0,SHAFT.x1,SHAFT.z1,0,SHAFT.y1,shaftMat,true);
     box(SHAFT.x0+0.08,SHAFT.z0-0.012,SHAFT.x1-0.08,SHAFT.z0,0.9,1.5,M(0xc9ced2),false);
-    const grate=M(0x9aa1a8);for(const [x,z] of FLOOR_DRAINS)box(x-0.075,z-0.075,x+0.075,z+0.075,0.003,0.008,grate,false);
+    const grate=M(0x9aa1a8);for(const f of FLOOR_DRAINS)box(f.x-0.075,f.z-0.075,f.x+0.075,f.z+0.075,0.003,0.008,grate,false);
+    // garden tap on the back wall (always shown): wall plate, brass bib tap with a red handle
+    const brassT=new THREE.MeshStandardMaterial({color:0xc9a23a,roughness:0.35,metalness:0.6});
+    for(const t of TAPS){box(t.x-0.05,t.z,t.x+0.05,t.z+0.015,t.y-0.05,t.y+0.05,M(0xd9d9d6),false);box(t.x-0.015,t.z+0.015,t.x+0.015,t.z+0.11,t.y-0.015,t.y+0.015,brassT,false);
+      box(t.x-0.015,t.z+0.09,t.x+0.015,t.z+0.11,t.y-0.07,t.y,brassT,false);box(t.x-0.04,t.z+0.04,t.x+0.04,t.z+0.06,t.y+0.02,t.y+0.035,M(0xd23a2a),false);}
   }
   // ---- electrical fittings (electrical.ts): 2-way switches (click / E toggles the room's lights), sockets, air
   // conditioners, wall TVs, water heaters, the living-room camera and the main panel, on their wall faces.

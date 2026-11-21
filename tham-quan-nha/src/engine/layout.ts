@@ -60,10 +60,12 @@ export interface DoorSpec {
 export const MAIN_SIDE = 0.5;
 /** Main entrance: fixed transom (ô sáng) over the leaves; leaves 2.25 + 0.45 = 2.7 m, level with the window tops. */
 export const MAIN_TRANSOM = 0.45;
+/** Ancestor room (phòng thờ): no door; its wall to the living room is a wooden slatted partition (default plan
+ *  coords) up to the ceiling, with an open passage [open] of height openH. Masonry only above the ceiling. */
+export const THO_SCREEN = { x0: 1.2, x1: 2.55, z0: 4.95, z1: 5.05, top: 3.2, open: [1.42, 2.22] as [number, number], openH: 2.2 };
 export const DOOR_SPECS: DoorSpec[] = [
   { id: 'd-main', label: 'Cửa chính (đôi, nhôm kính)', room: 'Phòng khách', axis: 'z', at: 1.1, hinge: 2.575, len: 1.8, cd: '+z', od: '-x', kind: 'main', h: 2.25 },
   { id: 'd-hong', label: 'Cửa hông (tường Tây)', room: 'Hành lang', axis: 'z', at: 13.9, hinge: 4.1, len: 0.8, cd: '+z', od: '-x', kind: 'outer' },
-  { id: 'd-tho', label: 'Cửa phòng thờ', room: 'Phòng thờ', axis: 'x', at: 5.0, hinge: 1.42, len: 0.8, cd: '+x', od: '+z', kind: 'inner' },
   { id: 'd-pn1', label: 'Cửa phòng ngủ 1', room: 'Phòng ngủ 1', axis: 'x', at: 5.0, hinge: 6.17, len: 0.9, cd: '-x', od: '+z', kind: 'inner', h: 2.2 },
   { id: 'd-pn2', label: 'Cửa phòng ngủ 2', room: 'Phòng ngủ 2', axis: 'x', at: 5.0, hinge: 9.85, len: 0.9, cd: '-x', od: '+z', kind: 'inner', h: 2.2 },
   { id: 'd-pn3', label: 'Cửa phòng ngủ 3', room: 'Phòng ngủ 3', axis: 'x', at: 4.0, hinge: 10.15, len: 0.9, cd: '+x', od: '-z', kind: 'inner', h: 2.2 },
