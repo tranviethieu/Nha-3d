@@ -3,7 +3,7 @@
 // canvas (so Vietnamese text renders with the system fonts) around off-screen renders from Game.snapshot, and the
 // sheets are packed as JPEG pages into a small hand-written PDF (no PDF library needed).
 import type { Game } from './Game';
-import { COLOR_SPECS, MAIN_SIDE, THO_SCREEN, fmtM, type Dir } from './layout';
+import { COLOR_SPECS, MAIN_SIDE, THO_SCREEN, THO_X, fmtM, type Dir } from './layout';
 import { CIRCUITS, ELEC, MAIN_BREAKER, type ElecKind } from './electrical';
 import { FLOOR_DRAINS, MANHOLES, PIPES, PIPE_STYLE, SEPTIC, SHAFT, SOLAR, TANK, TAPS, VALVES, type PipeKind } from './plumbing';
 
@@ -418,7 +418,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     heading(g, 'MẶT BẰNG ĐỊNH VỊ CỘT C, DẦM D (SƠ BỘ)', planBox.X, M + 70, 'Tâm cột / tim dầm theo mặt bằng kiến trúc hiện tại · gốc toạ độ: góc Đông-Nam tường bao (trục A1) · m');
     g.globalAlpha = 0.35; drawBase(g, false); g.globalAlpha = 1;
     const P = planP, S = d.structure;
-    const ox = map.mx(0), oz = map.mz(0), r2 = (v: number) => Math.round(v * 100) / 100;
+    const ox = map.mx(THO_X), oz = map.mz(0), r2 = (v: number) => Math.round(v * 100) / 100;
     // columns numbered row by row (front facade first), porch last
     const cols = [...S.cols].sort((a, b) => (+a.porch - +b.porch) || (Math.round(a.z * 4) - Math.round(b.z * 4)) || (a.x - b.x)).map((c2, i) => ({ ...c2, id: `C${i + 1}` }));
     const near = (a: number, b: number, tol = 0.16) => Math.abs(a - b) <= tol;
@@ -775,7 +775,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       const uR = (ex0: number, ez0: number, ex1: number, ez1: number): [number, number] => S2.alongX ? [ex0 - 7, ex1 - 7] : [S2.u(S2.xc, ez0), S2.u(S2.xc, ez1)];
       for (const w of d.walls) { const ex0 = map.mx(w[0]), ez0 = map.mz(w[1]), ex1 = map.mx(w[2]), ez1 = map.mz(w[3]);
         if (!(S2.alongX ? onCut(ez0, ez1) : onCut(ex0, ex1))) continue; const [p, q] = uR(ex0, ez0, ex1, ez1);
-        const T = THO_SCREEN, wood = w[0] === 0 && w[1] === 4.95 && w[2] === 11.45 && !S2.alongX && S2.xc > map.mx(T.x0) && S2.xc < map.mx(T.x1);
+        const T = THO_SCREEN, wood = w[0] === THO_X && w[1] === 4.95 && w[2] === 11.45 && !S2.alongX && S2.xc > map.mx(T.x0) && S2.xc < map.mx(T.x1);
         if (wood) { const open = S2.xc > map.mx(T.open[0]) && S2.xc < map.mx(T.open[1]); fillU(p, q, T.top, E1, '#2b3038'); fillU(p, q, open ? T.openH : 0, T.top, '#8a5a3c'); continue; }
         fillU(p, q, 0, w[0] === 12.46 && w[2] === 12.56 ? 2.5 : E1, '#2b3038'); }
       for (const w of map.windows) { if (w.hidden) continue; const r = w.rect, ex0 = map.mx(r[0]), ez0 = map.mz(r[1]), ex1 = map.mx(r[2]), ez1 = map.mz(r[3]);

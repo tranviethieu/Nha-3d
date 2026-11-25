@@ -57,8 +57,8 @@ export const ELEC: ElecItem[] = [
   { kind: 'tv', room: 'Phòng ngủ 1', x: 6.4, z: 6.3, y: 1.35, n: '-x', circuit: 'C6', note: 'tivi 43"' },
   S('Phòng ngủ 1', 6.4, 6.05, 0.95, '-x', 'C6', 'tivi'),
   { kind: 'data', room: 'Phòng ngủ 1', x: 6.4, z: 6.55, y: 0.95, n: '-x', circuit: '' },
-  { kind: 'ac', room: 'Phòng ngủ 1', x: 5.8, z: 8.8, y: 2.85, n: '-z', circuit: 'C8', note: '9000 BTU, trên tủ áo' },
-  { kind: 'acOut', room: 'Phòng ngủ 1', x: 5.8, z: 9.0, y: 2.3, n: '+z', circuit: 'C8', note: 'cục nóng, tường hậu sau tủ áo' },
+  { kind: 'ac', room: 'Phòng ngủ 1', x: 5.95, z: 8.8, y: 2.85, n: '-z', circuit: 'C8', note: '9000 BTU, trên tủ áo' },
+  { kind: 'acOut', room: 'Phòng ngủ 1', x: 5.95, z: 9.0, y: 2.3, n: '+z', circuit: 'C8', note: 'cục nóng, tường hậu sau tủ áo' },
   // ---- Phòng ngủ 2 ----
   SW('Phòng ngủ 2', 8.75, 5.05, 1.25, '+z', 'C2', 'cạnh cửa'),
   SW('Phòng ngủ 2', 6.5, 8.6, 0.95, '+x', 'C2', 'đầu giường'),
@@ -81,8 +81,8 @@ export const ELEC: ElecItem[] = [
   { kind: 'acOut', room: 'Phòng ngủ 3', x: 14.0, z: 2.7, y: 2.3, n: '+x', circuit: 'C10', note: 'cục nóng, tường hồi tây' },
   // ---- Phòng thờ ----
   SW('Phòng thờ', 2.45, 5.05, 1.25, '+z', 'C2', 'cạnh lối vào, trên trụ vách gỗ'),
-  SW('Phòng thờ', 0.2, 5.35, 1.25, '+x', 'C2', 'đầu phòng'),
-  S('Phòng thờ', 2.55, 7.98, 1.3, '-x', 'C3', 'đèn thờ'), S('Phòng thờ', 0.2, 8.4, 0.4, '+x', 'C3'),
+  SW('Phòng thờ', 0.14, 5.35, 1.25, '+x', 'C2', 'đầu phòng'),
+  S('Phòng thờ', 2.55, 7.98, 1.3, '-x', 'C3', 'đèn thờ'), S('Phòng thờ', 0.14, 8.4, 0.4, '+x', 'C3'),
   // ---- Hành lang ----
   SW('Hành lang', 10.3, 4.95, 1.25, '-z', 'C2', 'từ bếp'), SW('Hành lang', 13.5, 4.95, 1.25, '-z', 'C2', 'cạnh cửa hông'),
   S('Hành lang', 11.6, 4.05, 0.4, '+z', 'C7', 'máy hút bụi'),

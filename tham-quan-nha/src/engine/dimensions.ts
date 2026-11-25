@@ -2,7 +2,7 @@
 // dimension lines per room, overall 14 x 9 m and window widths. Drawn flat on the floor, on top of
 // everything (depthTest off) so it reads like an annotated plan.
 import * as THREE from 'three';
-import { ROOM_DIMS, PlanMap, fmtM } from './layout';
+import { ROOM_DIMS, PlanMap, THO_X, fmtM } from './layout';
 
 export { ROOM_DIMS, type RoomDim } from './layout';
 
@@ -108,7 +108,7 @@ export function buildDimensions(scene: THREE.Scene, map: PlanMap = new PlanMap()
 
   // overall size (outside the facade and the right side) and window widths, on the ground
   const HW = map.mx(14), HD = map.mz(9);
-  exterior.add(dimension(0, -1.0, HW, -1.0, `${fmtM(map.houseW)} m`, Y_OUT, 0.7));
+  exterior.add(dimension(map.mx(THO_X), -1.0, HW, -1.0, `${fmtM(map.houseW)} m`, Y_OUT, 0.7));
   const pathDim = dimension(-0.9, 0, -0.9, -1.5, '1.5 m', Y_OUT, 0.5); // side path width (site: never mirrored)
   exterior.add(pathDim);
   exterior.add(dimension(HW + 1, 0, HW + 1, HD, `${fmtM(map.houseD)} m`, Y_OUT, 0.6));

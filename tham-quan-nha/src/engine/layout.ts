@@ -62,6 +62,9 @@ export const MAIN_SIDE = 0.5;
 export const MAIN_TRANSOM = 0.45;
 /** Ancestor room (phòng thờ): no door; its wall to the living room is a wooden slatted partition (default plan
  *  coords) up to the ceiling, with an open passage [open] of height openH. Masonry only above the ceiling. */
+/** Outer face of the ancestor room's front wall (default plan x): 0.06 in front of the porch line x = 0, so the
+ *  room is 2.41 m wide inside (THO_X + 0.2 .. 2.55): three 800 tiles + two 3 mm joints + ~2 mm at each wall. */
+export const THO_X = -0.06;
 export const THO_SCREEN = { x0: 1.2, x1: 2.55, z0: 4.95, z1: 5.05, top: 3.2, open: [1.42, 2.22] as [number, number], openH: 2.2 };
 export const DOOR_SPECS: DoorSpec[] = [
   { id: 'd-main', label: 'Cửa chính (đôi, nhôm kính)', room: 'Phòng khách', axis: 'z', at: 1.1, hinge: 2.575, len: 1.8, cd: '+z', od: '-x', kind: 'main', h: 2.25 },
@@ -79,7 +82,7 @@ export const WIN_SPECS: WinSpec[] = [
   { id: 'w-bep2', label: 'Cửa sổ bếp 0,8 m (thay cửa phụ)', room: 'Bếp + ăn', rect: [6.62, -0.02, 7.42, 0.22, 0.9, 2.7], style: 'double' },
   { id: 'w-bep', label: 'Cửa sổ bếp (hất lên)', room: 'Bếp + ăn', rect: [7.97, -0.02, 9.17, 0.22, 0.9, 1.7], style: 'awning' },
   { id: 'w-pn3t', label: 'Cửa sổ mặt tiền', room: 'Phòng ngủ 3', rect: [10.15, -0.02, 11.3, 0.22, 0.9, 2.7], style: 'double' },
-  { id: 'w-tho', label: 'Cửa sổ phòng thờ (3 cánh)', room: 'Phòng thờ', rect: [-0.02, 6.12, 0.22, 7.72, 0.9, 2.7], style: 'triple' },
+  { id: 'w-tho', label: 'Cửa sổ phòng thờ (3 cánh)', room: 'Phòng thờ', rect: [THO_X - 0.02, 6.12, THO_X + 0.22, 7.72, 0.9, 2.7], style: 'triple' },
   { id: 'w-pn1', label: 'Cửa sổ', room: 'Phòng ngủ 1', rect: [3.95, 8.78, 5.1, 9.02, 0.9, 2.7], style: 'double' },
   { id: 'w-pn2', label: 'Cửa sổ', room: 'Phòng ngủ 2', rect: [8.035, 8.78, 9.185, 9.02, 0.9, 2.7], style: 'double' },
   { id: 'w-wc1', label: 'Cửa sổ', room: 'WC1', rect: [11.33, 8.78, 11.93, 9.02, 1.6, 2.2], style: 'double' },
@@ -124,7 +127,7 @@ export const ROOM_DIMS: RoomDim[] = [
   { room: 'Bếp + ăn', title: 'Bếp + ăn', rect: [5.95, 0.2, 9.95, 4.95], w: '3.95', d: '4.75', area: '18.76' },
   { room: 'Phòng ngủ 3', title: 'P. ngủ 3', rect: [10.05, 0.2, 13.8, 3.95], w: '3.75', d: '3.75', area: '14.06' },
   { room: 'Hành lang', title: 'Hành lang', rect: [10.05, 4.05, 13.8, 4.95], w: '3.75', d: '0.9', area: '≈3.38' },
-  { room: 'Phòng thờ', title: 'P. thờ', rect: [0.2, 5.05, 2.55, 8.8], w: '2.35', d: '3.75', area: '8.81' },
+  { room: 'Phòng thờ', title: 'P. thờ', rect: [0.14, 5.05, 2.55, 8.8], w: '2.41', d: '3.75', area: '9.04' },
   { room: 'Phòng ngủ 1', title: 'Phòng ngủ 1', rect: [2.65, 5.05, 6.4, 8.8], w: '3.75', d: '3.75', area: '14.06' },
   { room: 'Phòng ngủ 2', title: 'Phòng ngủ 2', rect: [6.5, 5.05, 10.72, 8.8], w: '4.22', d: '3.75', area: '15.83' },
   { room: 'Lavabo', title: 'Giặt + rửa', rect: [10.82, 5.05, 13.8, 6.2], w: '2.98', d: '1.15', area: '3.43' },
@@ -134,7 +137,7 @@ export const ROOM_DIMS: RoomDim[] = [
 
 // Rigid spans in default plan coords: wall thickness (walls running along z for X, along x for Z, incl. the WC
 // tile skins). Door and window openings are added per layout in PlanMap. Keep in sync with WALLS in house.ts.
-const WALL_RIGID_X: [number, number][] = [[0, 0.2], [1.0, 1.2], [2.55, 2.65], [6.4, 6.5], [9.95, 10.05], [10.72, 10.84], [12.44, 12.58], [13.78, 14]];
+const WALL_RIGID_X: [number, number][] = [[THO_X, THO_X + 0.2], [1.0, 1.2], [2.55, 2.65], [6.4, 6.5], [9.95, 10.05], [10.72, 10.84], [12.44, 12.58], [13.78, 14]];
 const WALL_RIGID_Z: [number, number][] = [[0, 0.2], [3.95, 4.05], [4.95, 5.05], [6.2, 6.32], [8.78, 9]];
 
 class Axis {
@@ -201,7 +204,7 @@ export class PlanMap {
     const l = this.layout;
     return {
       main: make(l.roof ?? {}, mx(0.2), mx(14.8), mz(-0.8), mz(9.8), 'x1', 'mid'),
-      tho: make(l.subRoofs?.tho ?? {}, mx(-0.8), mx(4.0), mz(4.9), mz(9.4), 'x0', 'z1'),
+      tho: make(l.subRoofs?.tho ?? {}, mx(THO_X - 0.8), mx(4.0), mz(4.9), mz(9.4), 'x0', 'z1'),
       sanh: make(l.subRoofs?.sanh ?? {}, mx(-1.3), mx(4.0), mz(-0.3), mz(5.3), 'x0', 'z0'),
     };
   }
@@ -229,8 +232,8 @@ export class PlanMap {
     const changed = Math.abs(w - parseFloat(r.w)) > 1e-3 || Math.abs(dd - parseFloat(r.d)) > 1e-3;
     return { w, d: dd, area: changed ? (w * dd).toFixed(2) : r.area, changed };
   }
-  /** Overall size of the house (default 14 x 9 m). */
-  get houseW() { return this.mx(14) - this.mx(0); }
+  /** Overall size of the house (default 14.06 x 9 m: the ancestor room sticks out to THO_X). */
+  get houseW() { return this.mx(14) - this.mx(THO_X); }
   get houseD() { return this.mz(9) - this.mz(0); }
 }
 

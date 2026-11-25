@@ -473,8 +473,10 @@ export class Game {
     for (const w of this.house.windows) { const d = Math.hypot(p.x - w.x, p.z - w.z); if (d < 1.3) consider(d, { win: w }); }
     for (const w of this.house.wardrobes) {
       // distance to the 2 m front, not its centre
-      const hw = w.half ?? 1, cx = THREE.MathUtils.clamp(p.x, w.x - hw, w.x + hw), d = Math.hypot(p.x - cx, p.z - w.z);
-      if (d < 1.1) consider(d * 0.6, { wardrobe: w }, cx, w.z);
+      const hw = w.half ?? 1, alongZ = w.along === 'z';
+      const cx = alongZ ? w.x : THREE.MathUtils.clamp(p.x, w.x - hw, w.x + hw), cz = alongZ ? THREE.MathUtils.clamp(p.z, w.z - hw, w.z + hw) : w.z;
+      const d = Math.hypot(p.x - cx, p.z - cz);
+      if (d < 1.1) consider(d * 0.6, { wardrobe: w }, cx, cz);
     }
     for (const s of this.house.seats) { const d = Math.hypot(p.x - s.x, p.z - s.z); if (d < 0.8) consider(d * 0.6, { seat: s }, s.x, s.z); }
     { // TV: within reach in front of the screen

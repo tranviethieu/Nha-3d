@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { ELEC } from './electrical';
 import { PIPES, PIPE_STYLE, SHAFT, FLOOR_DRAINS, SEPTIC, MANHOLES, VALVES, TAPS, TANK, SOLAR } from './plumbing';
-import { LIGHT_SPACING, MAIN_SIDE, MAIN_TRANSOM, PlanMap, ROOM_DIMS, THO_SCREEN, emptyLayout, type Layout } from './layout';
+import { LIGHT_SPACING, MAIN_SIDE, MAIN_TRANSOM, PlanMap, ROOM_DIMS, THO_SCREEN, THO_X, emptyLayout, type Layout } from './layout';
 
 export type Dir = '+x' | '-x' | '+z' | '-z';
 /** Axis-aligned box in WORLD coordinates. */
@@ -13,7 +13,7 @@ export interface Rect { x0: number; x1: number; z0: number; z1: number; y0: numb
 export interface Leaf { g: THREE.Group; c: number; o: number; t: number; /** hinge axis, default 'y' (vertical) */ axis?: 'x' | 'y' }
 export interface Door extends Leaf { open: boolean; len: number; /** set when the house is mirrored: world z = mirror - local z */ mirror?: number }
 /** Something with hinged leaves that open together: a casement/awning window or a wardrobe. x,z = its front centre. */
-export interface Win { leaves: Leaf[]; open: boolean; x: number; z: number; /** cabinets: half-width of the front and display name */ half?: number; name?: string }
+export interface Win { leaves: Leaf[]; open: boolean; x: number; z: number; /** cabinets: half-width of the front and display name */ half?: number; name?: string; /** axis the front runs along (default 'x') */ along?: 'x' | 'z' }
 /** Where the character sits: hip position (WORLD), facing yaw, seat height. */
 export interface Seat { x: number; z: number; face: number; top: number; kind: 'chair' | 'sofa' | 'desk' }
 /** Bed in WORLD coords; the headboard is on the z0 side ('N'), z1 side ('S'), x0 side ('E') or x1 side ('W'). */
@@ -192,13 +192,17 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   box(-8,-3.4,20,-3.3,-1.2,-0.3,earth,false);box(-8,-1.8,20,-1.7,-1.2,-0.3,earth,false);box(-8,-3.4,20,-1.7,-1.25,-1.2,M(0x4f4636),false);
   box(-8,-3.3,20,-1.8,-1.2,-0.8,new THREE.MeshStandardMaterial({color:0x5f8f86,transparent:true,opacity:0.85,roughness:0.15}),false);
   const site1=scene.children.length,siteF1=floors.length,siteS1=solids.length; // the site: not mirrored
-  box(0,0,14,9,-0.3,0,M(0xcfc9be));
+  box(0,0,14,9,-0.3,0,M(0xcfc9be));box(THO_X,4.95,0,9,-0.3,0,M(0xcfc9be)); // + the ancestor room's front strip
   const stoneMat=M(0x3a3d42);
   box(-0.8,0,0,4.95,-0.3,0,M(0xe2ddd4));
   box(-1.25,1.0,-0.8,4.0,-0.3,-0.15,stoneMat);
   box(-1.05,1.0,-0.8,4.0,-0.15,0,M(0xe8e4dc));
-  [[0,0,1.0,4.95,0xe7c3ae],[1.2,0.2,5.95,4.95,0xeeeae4],[5.95,0.2,9.95,4.95,0xe6dfd1],[10.05,4.05,13.8,4.95,0xe6dfd1],[10.05,0.2,13.8,3.95,0xc9a982],[0.2,5.05,2.55,8.8,0xd8c3a5],[2.65,5.05,6.4,8.8,0xc9a982],[6.5,5.05,10.72,8.8,0xc9a982],[10.82,5.05,13.8,6.2,0xdfe3e6],[10.82,6.3,12.46,8.8,0xd6dadd],[12.56,6.3,13.8,8.8,0xd6dadd]].forEach(f=>box(f[0],f[1],f[2],f[3],0,0.012,M(f[4]),false));
+  [[0,0,1.0,4.95,0xe7c3ae],[1.2,0.2,5.95,4.95,0xeeeae4],[5.95,0.2,9.95,4.95,0xe6dfd1],[10.05,4.05,13.8,4.95,0xe6dfd1],[10.05,0.2,13.8,3.95,0xc9a982],[THO_X+0.2,5.05,2.55,8.8,0xd8c3a5],[2.65,5.05,6.4,8.8,0xc9a982],[6.5,5.05,10.72,8.8,0xc9a982],[10.82,5.05,13.8,6.2,0xdfe3e6],[10.82,6.3,12.46,8.8,0xd6dadd],[12.56,6.3,13.8,8.8,0xd6dadd]].forEach(f=>box(f[0],f[1],f[2],f[3],0,0.012,M(f[4]),false));
   box(2.2,1.3,5.0,3.0,0.012,0.02,M(0xd9d2c4),false);
+  { // ancestor-room floor: 800 × 800 tiles with 3 mm joints, three across (2.41 m wide room), laid from the front wall
+    const grout=M(0xb59f82),gx=THO_X+0.2+0.002,T=0.8,J=0.003;
+    for(let k=1;k<3;k++){const x=gx+k*T+(k-1)*J;box(x,5.05,x+J,8.8,0.02,0.0206,grout,false);}
+    for(let z=5.052+T;z<8.79;z+=T+J)box(THO_X+0.2,z,2.55,z+J,0.02,0.0206,grout,false);}
   const showerTile=M(0x6c747c);
   box(10.84,7.5,12.44,8.78,0.012,0.02,showerTile,false);box(12.58,6.32,13.78,7.6,0.012,0.02,showerTile,false);
   // Window openings [x0,z0,x1,z1,y0,y1] (plan). The original drew glass over solid walls;
@@ -224,13 +228,13 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     seg(cur,a1,y0,y1);}
   const wallMat=M(map.color('wall'));
   // WALLS (keep WALL_RIGID_X / Z in layout.ts in sync): continuous walls; doors and windows are cut out as holes
-  const WALLS=[[1.0,0,14,0.2],[1.0,0.2,1.2,4.95],[0,4.95,11.45,5.05],[13.2,4.95,14,5.05],[0,5.05,0.2,9],[0.2,8.8,13.8,9],[13.8,0,14,9],[9.95,0.2,10.05,3.95],[9.95,3.95,13.8,4.05],[2.55,5.05,2.65,8.8],[6.4,5.05,6.5,8.8],[10.72,5.05,10.82,8.8],[10.82,6.2,13.8,6.3],[12.46,6.3,12.56,8.8]];
+  const WALLS=[[1.0,0,14,0.2],[1.0,0.2,1.2,4.95],[THO_X,4.95,11.45,5.05],[13.2,4.95,14,5.05],[THO_X,5.05,THO_X+0.2,9],[THO_X+0.2,8.8,13.8,9],[13.8,0,14,9],[9.95,0.2,10.05,3.95],[9.95,3.95,13.8,4.05],[2.55,5.05,2.65,8.8],[6.4,5.05,6.5,8.8],[10.72,5.05,10.82,8.8],[10.82,6.2,13.8,6.3],[12.46,6.3,12.56,8.8]];
   // the WC1 / WC2 partition stops at the top of the WC slab (+2.5): the storage loft above runs across both WCs
   // The ancestor room has no door: the middle wall between it and the living room (THO_SCREEN) is a wooden slatted
   // partition (vách gỗ nan) up to the ceiling with an open 0.8 m passage; only the strip above the ceiling is masonry.
-  const isSpine=(w:number[])=>w[0]===0&&w[1]===4.95&&w[2]===11.45;
+  const isSpine=(w:number[])=>w[0]===THO_X&&w[1]===4.95&&w[2]===11.45;
   WALLS.forEach(w=>{
-    if(isSpine(w)){const T=THO_SCREEN;wallWithHoles([0,4.95,T.x0,5.05],0,H,wallMat,true);wallWithHoles([T.x0,4.95,T.x1,5.05],T.top,H,wallMat,true);wallWithHoles([T.x1,4.95,11.45,5.05],0,H,wallMat,true);return;}
+    if(isSpine(w)){const T=THO_SCREEN;wallWithHoles([THO_X,4.95,T.x0,5.05],0,H,wallMat,true);wallWithHoles([T.x0,4.95,T.x1,5.05],T.top,H,wallMat,true);wallWithHoles([T.x1,4.95,11.45,5.05],0,H,wallMat,true);return;}
     wallWithHoles(w,0,w[0]===12.46&&w[2]===12.56?2.5:H,wallMat,true);});
   {const T=THO_SCREEN,wood=M(0x6b4430),z0=4.975,z1=5.025,[o0,o1]=T.open,oh=T.openH;
     box(T.x0,z0,T.x1,z1,T.top-0.08,T.top,wood,false);                                                     // top rail
@@ -247,9 +251,9 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   // under its lower roof). Phào dưới: plinth from the foundation to 0.45 m, also on the porch-facing walls.
   const band=M(map.color('topBand')),plinth=M(map.color('bottomBand'));
   [[1.0,-0.04,14.04,0],[14,0,14.04,9.04],[0.2,9,14.04,9.04]].forEach(w=>wallWithHoles(w,E1-0.76,E1-0.26,band,true));
-  [[-0.04,4.95,0,9.04],[-0.04,9,0.2,9.04]].forEach(w=>wallWithHoles(w,E2-0.76,E2-0.26,band,true));
-  [[0.96,-0.04,14.04,0],[14,0,14.04,9.04],[-0.04,9,14.04,9.04],[-0.04,4.91,0,9.04],[0.96,0.2,1.0,4.95],[0,4.91,1.0,4.95]].forEach(w=>wallWithHoles(w,-0.3,0.45,plinth,true));
-  box(-0.04,5.9,0,7.94,0.35,0.85,band,false);
+  [[THO_X-0.04,4.95,THO_X,9.04],[THO_X-0.04,9,THO_X+0.2,9.04]].forEach(w=>wallWithHoles(w,E2-0.76,E2-0.26,band,true));
+  [[0.96,-0.04,14.04,0],[14,0,14.04,9.04],[THO_X-0.04,9,14.04,9.04],[THO_X-0.04,4.91,THO_X,9.04],[0.96,0.2,1.0,4.95],[THO_X,4.91,1.0,4.95]].forEach(w=>wallWithHoles(w,-0.3,0.45,plinth,true));
+  box(THO_X-0.04,5.9,THO_X,7.94,0.35,0.85,band,false);
   const darkWood=new THREE.MeshStandardMaterial({color:0x4a2c1e,roughness:0.5});
   box(1.2,0.2,5.95,0.28,0,0.1,darkWood,false);box(1.2,4.87,5.95,4.95,0,0.1,darkWood,false);
   const colMat=M(map.color('column'));
@@ -333,7 +337,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   box(5.45,0.95,5.92,3.65,0.25,0.62,darkWood);box(5.55,1.05,5.9,3.55,0,0.25,M(0x2a1a12),false);
   box(5.44,0.95,5.46,3.65,0.42,0.44,M(0x2a1a12),false);
   box(5.85,1.55,5.9,3.05,0.85,1.7,M(0x111111));tvScreen=box(5.845,1.58,5.85,3.02,0.88,1.67,M(0x1f3550),false);});
-  const wood=M(0x6b4430),white=M(0xfafafa),blanket=M(0x9fb3c8),counter=M(0xd9bb8c),steel=new THREE.MeshStandardMaterial({color:0xc9ced3,roughness:0.3,metalness:0.6}),chrome=new THREE.MeshStandardMaterial({color:0xe6e9ec,roughness:0.15,metalness:0.9}),altar=M(0x8b2e2e),blue=M(0x6aa7d8),chairF=M(0x8e99a6),ceramic=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.25});
+  const wood=M(0x6b4430),white=M(0xfafafa),blanket=M(0x9fb3c8),counter=M(0xd9bb8c),steel=new THREE.MeshStandardMaterial({color:0xc9ced3,roughness:0.3,metalness:0.6}),chrome=new THREE.MeshStandardMaterial({color:0xe6e9ec,roughness:0.15,metalness:0.9}),blue=M(0x6aa7d8),chairF=M(0x8e99a6),ceramic=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.25});
   const seat=(x:number,z:number,face:number,top:number,kind:Seat['kind'])=>seats.push({x:x-7,z:z-4.5,face,top,kind});
   // Living-room set in the walnut (gỗ óc chó) style of the client's photo: a walnut frame on a recessed plinth,
   // wide flat wooden arms, a wooden back panel, dark-brown leather seat and back cushions; walnut coffee table with
@@ -433,7 +437,93 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   obj('giuong3','Giường + 2 tab đầu giường','Phòng ngủ 3',true,()=>{bed(11.55,0.2,13.35,2.2,'N');box(11.1,0.2,11.55,0.65,0,0.5,wood);box(13.35,0.2,13.8,0.65,0,0.5,wood);});
   obj('giuong1','Giường + 2 tab đầu giường','Phòng ngủ 1',true,()=>{bed(2.65,5.05,4.45,7.05,'N');box(4.45,5.05,4.9,5.5,0,0.5,wood);}); // head to the south wall, along the thờ wall
   obj('giuong2','Giường + 2 tab đầu giường','Phòng ngủ 2',true,()=>{bed(6.5,6.55,8.5,8.35,'E');box(6.5,8.35,6.95,8.8,0,0.5,wood);}); // head to the east (PN1) wall
-  obj('banTho','Bàn thờ','Phòng thờ',true,()=>box(1.59,5.96,2.55,7.88,0,1.2,altar));
+  // Án gian thờ (client's photo): 1.97 long × 0.97 deep × 1.27 high to the top of the scrolled ends, back to the PN1
+  // wall and facing the front window. Thick legs on hoof feet, a top board with raised scrolled ends over a Greek-key
+  // frieze, an apron with three carved panels, fretwork (chữ công) with a lotus panel in the middle and fret
+  // brackets down the legs; a small two-door cabinet underneath. Local coords: u along the length from za, v depth
+  // from the front face xf.
+  const AL=1.97,AD=0.97,axf=2.55-AD,aza=6.925-AL/2,ayT=1.147;
+  const aWood=new THREE.MeshStandardMaterial({color:0x7a3a20,roughness:0.55}),aDark=new THREE.MeshStandardMaterial({color:0x5c2a15,roughness:0.6}),
+    aLight=new THREE.MeshStandardMaterial({color:0x8e4a2a,roughness:0.5}),aBrass=new THREE.MeshStandardMaterial({color:0xd2a83c,roughness:0.28,metalness:0.85});
+  const AB=(u0:number,u1:number,v0:number,v1:number,y0:number,y1:number,mat:THREE.MeshStandardMaterial,edges=false)=>box(axf+v0,aza+u0,axf+v1,aza+u1,y0,y1,mat,edges);
+  const AC=(u:number,v:number,y:number,r1:number,r2:number,h:number,mat:THREE.Material,rx?:number,rz?:number)=>cyl(axf+v,y,aza+u,r1,r2,h,mat,rx,rz);
+  /** Square fret loop on the front face (v0..v1) in the u/y plane. */
+  const fret=(u0:number,u1:number,y0:number,y1:number,v0=0.03,v1=0.06,t=0.025)=>{AB(u0,u1,v0,v1,y1-t,y1,aWood);AB(u0,u1,v0,v1,y0,y0+t,aWood);AB(u0,u0+t,v0,v1,y0,y1,aWood);AB(u1-t,u1,v0,v1,y0,y1,aWood);};
+  obj('banTho','Án gian thờ (197 × 97 × 127)','Phòng thờ',true,()=>{
+    const L=AL,D=AD;
+    // legs on hoof feet (chân quỳ), the toes kicked out
+    for(const [u0,u1,toe] of [[0.03,0.13,-1],[L-0.13,L-0.03,1]] as [number,number,number][])for(const [v0,v1] of [[0.04,0.14],[D-0.14,D-0.04]]){
+      AB(u0,u1,v0,v1,0.14,0.967,aWood,true);
+      AB(u0-0.012,u1+0.012,v0-0.012,v1+0.012,0.03,0.14,aWood,true);
+      AB(toe<0?u0-0.03:u1-0.08,toe<0?u0+0.08:u1+0.03,v0-0.02,v1+0.01,0,0.05,aDark);}
+    // body: apron box, cornice, Greek-key frieze, top board, scrolled ends
+    AB(0.03,L-0.03,0.05,D-0.05,0.77,0.967,aWood,true);
+    AB(0.01,L-0.01,0.01,D-0.01,0.967,1.014,aWood,true);
+    AB(0.035,L-0.035,0.035,D-0.035,1.014,1.118,aDark,true);
+    AB(0.06,L-0.06,0.03,0.036,1.04,1.044,aLight);AB(0.06,L-0.06,0.03,0.036,1.088,1.092,aLight);
+    for(let u=0.08;u<L-0.08;u+=0.06){AB(u,u+0.03,0.03,0.036,1.044,1.088,aLight);AB(u+0.012,u+0.034,0.03,0.036,1.06,1.066,aLight);}
+    AB(0,L,0,D,1.118,ayT,aWood,true);
+    for(const [u0,u1,s] of [[0,0.07,1],[L-0.07,L,-1]] as [number,number,number][]){
+      AB(u0,u1,0,D,ayT,1.255,aWood,true);
+      AC(s>0?0.035:L-0.035,D/2,1.25,0.035,0.035,D,aWood,0,Math.PI/2);       // rolled top of the scroll
+      const ui=s>0?u1:u0-0.13;AB(ui,ui+0.13,0.02,D-0.02,ayT,1.19,aWood);              // step inside it
+      AB(ui+0.03,ui+0.1,-0.004,0.02,ayT+0.008,1.18,aLight);}
+    // apron: three carved panels (flowers), raised from the front face
+    for(const [u0,u1] of [[0.17,0.58],[0.62,1.35],[1.39,1.8]]){AB(u0,u1,0.035,0.05,0.795,0.945,aDark);AB(u0+0.03,u1-0.03,0.028,0.035,0.82,0.92,aLight);
+      for(let u=u0+0.07;u<u1-0.05;u+=0.09)AC(u,0.027,0.87,0.018,0.018,0.012,aWood,0,Math.PI/2);}
+    // fretwork band: lotus panel in the middle, chữ công frets either side, fret brackets down the legs
+    AB(0.62,1.35,0.04,0.06,0.575,0.77,aDark);AB(0.66,1.31,0.034,0.04,0.6,0.745,aLight);
+    AC(L/2,0.03,0.672,0.055,0.055,0.012,aWood,0,Math.PI/2);
+    for(let k=0;k<6;k++){const a=k*Math.PI/5;AC(L/2+Math.cos(a)*0.11,0.031,0.66+Math.sin(a)*0.05,0.022,0.022,0.01,aWood,0,Math.PI/2);}
+    for(const s of [1,-1]){const U=(u:number)=>s>0?u:L-u;const R=(a:number,b:number)=>[Math.min(U(a),U(b)),Math.max(U(a),U(b))] as [number,number];
+      fret(...R(0.14,0.36),0.58,0.765);fret(...R(0.38,0.6),0.58,0.765);
+      {const [a,b]=R(0.2,0.3);fret(a,b,0.63,0.715,0.04,0.06,0.018);}{const [a,b]=R(0.44,0.54);fret(a,b,0.63,0.715,0.04,0.06,0.018);}
+      fret(...R(0.13,0.3),0.4,0.58);fret(...R(0.13,0.26),0.22,0.4);
+      {const [a,b]=R(0.17,0.25);fret(a,b,0.44,0.54,0.04,0.06,0.016);}
+      // the same on the back and a plain stretcher on each end
+      {const [a,b]=R(0.13,0.6);AB(a,b,D-0.06,D-0.03,0.58,0.765,aWood);}
+      {const [a,b]=R(0.04,0.12);AB(a,b,0.14,D-0.14,0.77,0.967,aWood);AB(a,b,0.14,D-0.14,0.5,0.54,aWood);}}
+    // cabinet underneath, two doors with lotus medallions and brass handles
+    const cw=0.8,c0=L/2-cw/2,c1=c0+cw;
+    AB(c0+0.02,c1-0.02,0.06,0.5,0,0.03,aDark);
+    AB(c0,c1,0.04,0.52,0.03,0.4,aWood,true);
+    for(const [d0,d1] of [[c0+0.03,L/2-0.005],[L/2+0.005,c1-0.03]]){AB(d0,d1,0.03,0.04,0.06,0.375,aWood,true);AB(d0+0.03,d1-0.03,0.026,0.03,0.09,0.345,aDark);
+      AC((d0+d1)/2,0.024,0.22,0.09,0.09,0.008,aLight,0,Math.PI/2);AC((d0+d1)/2,0.02,0.22,0.05,0.05,0.008,aWood,0,Math.PI/2);}
+    AB(L/2-0.03,L/2-0.018,0.012,0.026,0.2,0.27,aBrass);AB(L/2+0.018,L/2+0.03,0.012,0.026,0.2,0.27,aBrass);
+    AB(c0+0.02,c1-0.02,0.05,0.5,0.4,0.475,aDark,true);
+    for(let u=c0+0.05;u<c1-0.05;u+=0.05)AB(u,u+0.025,0.044,0.05,0.42,0.455,aLight);
+    AB(c0-0.04,c1+0.04,0.02,0.54,0.475,0.535,aWood,true);
+  });
+  // Altar set (đồ thờ) on the table: bronze incense burner on a wooden stand in the middle, a pair of cranes,
+  // lotus candle stands at the ends, blue-and-white vases, footed plates and a tray of cups.
+  obj('doTho','Đồ thờ (đỉnh, hạc, chân nến, lục bình)','Phòng thờ',false,()=>{
+    const L=AL,y=ayT,blueM=new THREE.MeshStandardMaterial({color:0x2a4f9a,roughness:0.3}),white=new THREE.MeshStandardMaterial({color:0xf4f4f0,roughness:0.2});
+    const ball=(u:number,v:number,yc:number,r:number,mat:THREE.Material,sx=1,sy=1,sz=1)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(r,18,12),mat);m.position.set(axf+v-7,yc,aza+u-4.5);m.scale.set(sx,sy,sz);add(m);return m;};
+    // incense burner (đỉnh): stand, three legs, round body with lugs, domed lid with a lion knob
+    AB(L/2-0.16,L/2+0.16,0.42,0.72,y,y+0.08,aDark,true);
+    const yb=y+0.08,vc=0.57;
+    for(let k=0;k<3;k++){const a=k*2*Math.PI/3;AC(L/2+Math.cos(a)*0.07,vc+Math.sin(a)*0.07,yb+0.05,0.016,0.012,0.1,aBrass);}
+    ball(L/2,vc,yb+0.17,0.11,aBrass,1,0.8,1);AC(L/2,vc,yb+0.25,0.085,0.1,0.03,aBrass);
+    for(const s of [1,-1]){const h=new THREE.Mesh(new THREE.TorusGeometry(0.035,0.01,8,16),aBrass);h.position.set(axf+vc-7,yb+0.26,aza+L/2+s*0.13-4.5);h.rotation.y=Math.PI/2;add(h);}
+    ball(L/2,vc,yb+0.3,0.08,aBrass,1,0.7,1);AC(L/2,vc,yb+0.37,0.02,0.03,0.04,aBrass);ball(L/2,vc,yb+0.41,0.035,aBrass);
+    // cranes standing on turtles
+    for(const s of [1,-1]){const u=L/2+s*0.36,v=0.6;
+      ball(u,v,y+0.025,0.07,aBrass,1,0.45,1.25);AC(u,v-0.01,y+0.11,0.007,0.007,0.15,aBrass);AC(u,v+0.02,y+0.11,0.007,0.007,0.15,aBrass);
+      ball(u,v,y+0.22,0.06,aBrass,1.2,0.75,0.8);AC(u-s*0.01,v-0.02,y+0.36,0.009,0.012,0.22,aBrass);ball(u-s*0.01,v-0.035,y+0.47,0.018,aBrass,1,0.8,1.4);
+      AC(u-s*0.01,v-0.05,y+0.52,0.005,0.005,0.08,aBrass);AC(u-s*0.01,v-0.05,y+0.57,0.035,0.004,0.04,aBrass);}
+    // lotus candle stands at both ends
+    for(const u of [0.17,L-0.17]){const v=0.5;AC(u,v,y+0.02,0.07,0.08,0.04,aBrass);AC(u,v,y+0.2,0.022,0.028,0.32,aBrass);
+      ball(u,v,y+0.12,0.04,aBrass);ball(u,v,y+0.26,0.035,aBrass);AC(u,v,y+0.36,0.15,0.13,0.012,aBrass);
+      AC(u,v,y+0.45,0.02,0.024,0.17,aBrass);AC(u,v,y+0.56,0.05,0.025,0.05,aBrass);ball(u,v,y+0.6,0.025,aBrass,1,1.3,1);}
+    // blue-and-white vases (lục bình): lathe profile, white glaze with blue bands
+    const prof=[[0,0],[0.06,0],[0.065,0.02],[0.1,0.12],[0.095,0.2],[0.05,0.27],[0.042,0.3],[0.06,0.33],[0.058,0.335]].map(([r,h])=>new THREE.Vector2(r,h));
+    for(const u of [0.42,L-0.42]){const v=0.62,m=new THREE.Mesh(new THREE.LatheGeometry(prof,24),white);m.position.set(axf+v-7,y,aza+u-4.5);add(m);
+      for(const [r,h,t] of [[0.088,0.06,0.03],[0.1,0.13,0.05],[0.08,0.22,0.025],[0.046,0.29,0.015]])AC(u,v,y+h,r+0.002,r+0.002,t,blueM);}
+    // footed plates (mâm bồng) in front of the vases, cups on a brass tray in the middle
+    for(const u of [0.62,L-0.62]){const v=0.3;AC(u,v,y+0.025,0.04,0.05,0.05,white);AC(u,v,y+0.06,0.13,0.08,0.025,white);AC(u,v,y+0.073,0.13,0.13,0.004,blueM);}
+    AB(L/2-0.11,L/2+0.11,0.2,0.32,y,y+0.02,aBrass);
+    for(const du of [-0.06,0,0.06])AC(L/2+du,0.26,y+0.045,0.02,0.014,0.04,aBrass);
+  });
   obj('mayGiat','Máy giặt','Lavabo',true,()=>{box(13.2,5.16,13.8,5.76,0,0.85,white);cyl(13.5,0.6,5.46,0.17,0.17,0.02,M(0x9aa1a8),Math.PI/2*0,Math.PI/2);});
   const glassP=new THREE.MeshStandardMaterial({color:0xbfe3f7,transparent:true,opacity:0.35});
   // WC1 (1.6 m wide): toilet by the door against the west wall, facing the door side; shower inside at the
@@ -519,30 +609,38 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   clickables.push(...winLeaves);
   tvScreen.userData.tv=true;clickables.push(tvScreen);
   const inner=M(0xd7b48c),cloth=[0x3d7cc9,0xc94f4f,0xe8e2d6,0x4f8a5b,0x2f3a4a,0xd9a441].map(M);
-  /** 2 m wardrobe: open-front carcass with clothes on a rail and shelves, four doors opening toward `out`. */
-  function wardrobe(x0:number,z0:number,x1:number,z1:number,out:'+z'|'-z'){
-    const t=0.025,WH=2.2,s=out==='+z'?1:-1,zf=s>0?z1:z0,zb=s>0?z0:z1,xm=(x0+x1)/2;
-    box(x0,z0,x0+t,z1,0,WH,wood);box(x1-t,z0,x1,z1,0,WH,wood);box(xm-t/2,z0,xm+t/2,z1,0,WH,wood);
-    box(x0,Math.min(zb,zb+s*t),x1,Math.max(zb,zb+s*t),0,WH,inner);
-    box(x0,z0,x1,z1,WH-t,WH,wood);box(x0,z0,x1,z1,0,0.08,wood);
+  /** Wardrobe: open-front carcass with clothes on a rail and shelves, four doors opening toward `out`. Built in
+   *  local coords u (along the front, from x0 / z0) and v (depth, from the back), mapped to plan coords by P(). */
+  function wardrobe(x0:number,z0:number,x1:number,z1:number,out:Dir){
+    const t=0.025,WH=2.2,s=out[0]==='+'?1:-1,alongX=out[1]==='z';
+    const W=alongX?x1-x0:z1-z0,D=alongX?z1-z0:x1-x0,bk=alongX?(s>0?z0:z1):(s>0?x0:x1);
+    const P=(u:number,v:number):[number,number]=>alongX?[x0+u,bk+s*v]:[bk+s*v,z0+u];
+    const B=(u0:number,v0:number,u1:number,v1:number,y0:number,y1:number,mat:THREE.Material,edges=true)=>{
+      const [xa,za]=P(u0,v0),[xb,zb]=P(u1,v1);return box(Math.min(xa,xb),Math.min(za,zb),Math.max(xa,xb),Math.max(za,zb),y0,y1,mat as THREE.MeshStandardMaterial,edges);};
+    const um=W/2;
+    B(0,0,t,D,0,WH,wood);B(W-t,0,W,D,0,WH,wood);B(um-t/2,0,um+t/2,D,0,WH,wood);
+    B(0,0,W,t,0,WH,inner);
+    B(0,0,W,D,WH-t,WH,wood);B(0,0,W,D,0,0.08,wood);
     solids.push({x0:x0-7,x1:x1-7,z0:z0-4.5,z1:z1-4.5,y0:0,y1:WH});
-    // left half: shelf + hanging rail with clothes; right half: shelves with folded stacks
-    box(x0+t,z0+0.01,xm,z1-0.01,1.84,1.86,inner,false);
-    cyl((x0+xm)/2,1.74,(z0+z1)/2,0.012,0.012,xm-x0-t,steel,0,Math.PI/2);
-    for(let i=0;i<7;i++){const x=x0+0.12+i*0.12;box(x-0.02,(z0+z1)/2-0.22,x+0.02,(z0+z1)/2+0.22,0.95+(i%3)*0.08,1.72,cloth[i%cloth.length],false);}
-    [0.55,1.05,1.45].forEach((y,k)=>{box(xm+t/2,z0+0.01,x1-t,z1-0.01,y,y+0.02,inner,false);
-      [0,1,2].forEach(j=>{const a=xm+0.08+j*0.3;box(a,(z0+z1)/2-0.15,a+0.22,(z0+z1)/2+0.15,y+0.02,y+0.12+((j+k)%2)*0.06,cloth[(j+k*2)%cloth.length],false);});});
-    const w:Win={leaves:[],open:false,x:xm-7,z:zf-4.5,half:(x1-x0)/2,name:'tủ quần áo'},lw=(x1-x0)/4;
-    for(let i=0;i<4;i++){const cd:Dir=i%2?'-x':'+x',hx=x0+(i%2?i+1:i)*lw;
-      const gr=new THREE.Group();gr.position.set(hx-7,0,zf+s*0.012-4.5);
+    // first half: shelf + hanging rail with clothes; second half: shelves with folded stacks
+    B(t,0.01,um,D-0.01,1.84,1.86,inner,false);
+    {const [x,z]=P(um/2,D/2);alongX?cyl(x,1.74,z,0.012,0.012,um-t,steel,0,Math.PI/2):cyl(x,1.74,z,0.012,0.012,um-t,steel,Math.PI/2);}
+    for(let i=0;i<7;i++){const u=0.12+i*0.12;B(u-0.02,D/2-0.22,u+0.02,D/2+0.22,0.95+(i%3)*0.08,1.72,cloth[i%cloth.length],false);}
+    [0.55,1.05,1.45].forEach((y,k)=>{B(um+t/2,0.01,W-t,D-0.01,y,y+0.02,inner,false);
+      [0,1,2].forEach(j=>{const a=um+0.08+j*0.3;B(a,D/2-0.15,a+0.22,D/2+0.15,y+0.02,y+0.12+((j+k)%2)*0.06,cloth[(j+k*2)%cloth.length],false);});});
+    const [cx,cz]=P(um,D),w:Win={leaves:[],open:false,x:cx-7,z:cz-4.5,half:um,along:alongX?'x':'z',name:'tủ quần áo'},lw=W/4;
+    const ox=alongX?0:s,oz=alongX?s:0; // outward unit vector
+    for(let i=0;i<4;i++){const cd:Dir=alongX?(i%2?'-x':'+x'):(i%2?'-z':'+z'),[hx,hz]=P((i%2?i+1:i)*lw,D+0.012);
+      const c=angW[cd],gr=new THREE.Group();gr.position.set(hx-7,0,hz-4.5);
       const geo=new THREE.BoxGeometry(lw-0.006,2.14,0.02);const m=new THREE.Mesh(geo,wood);m.position.set(lw/2,1.1,0);gr.add(m);
       const ed=new THREE.LineSegments(new THREE.EdgesGeometry(geo),edgeMat);ed.position.copy(m.position);gr.add(ed);
-      const kn=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.22,0.025),knobMat);kn.position.set(lw-0.05,1.1,(cd==='+x'?s:-s)*0.022);gr.add(kn);
-      const c=angW[cd];let d=angW[out]-c;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;
+      // the knob goes on the outer face: local +z points along (sin c, cos c) in plan
+      const kn=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.22,0.025),knobMat);kn.position.set(lw-0.05,1.1,Math.sign(ox*Math.sin(c)+oz*Math.cos(c))*0.022);gr.add(kn);
+      let d=angW[out]-c;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;
       gr.rotation.y=c;w.leaves.push({g:gr,c,o:c+d*0.95,t:c});m.userData.win=w;kn.userData.win=w;clickables.push(m,kn);add(gr);}
     wardrobes.push(w);}
   obj('tuAo3','Tủ quần áo','Phòng ngủ 3',false,()=>wardrobe(11.8,3.15,13.8,3.95,'-z'));
-  obj('tuAo1','Tủ quần áo','Phòng ngủ 1',false,()=>wardrobe(5.15,8.0,6.4,8.8,'-z'));     // north corner by PN2
+  obj('tuAo1','Tủ quần áo','Phòng ngủ 1',false,()=>wardrobe(5.8,6.9,6.4,8.8,'-x'));      // along the PN2 (left) wall, back corner, past the TV
   obj('tuAo2','Tủ quần áo','Phòng ngủ 2',false,()=>wardrobe(6.5,5.05,8.5,5.85,'+z'));
   /** Wine cabinet in the living-room corner, in line with the TV unit: same depth, as tall as the partition (vh),
    *  front facing the living room (-x) like the TV wall. Built in local coords u (along the front, from the facade
@@ -678,7 +776,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   {// sub-roof fascia + soffits (porch ceiling), in edited coords like the main roof's
     const wx=mx(1.0),hz0=mz(0),hz9=mz(4.95);noMap=true;
     fb(RT.X0-0.06,RT.Z0,RT.X0,RT.Z1,E2);fb(RT.X0,RT.Z1,0.2,RT.Z1+0.06,E2);if(RP.Z1<=RT.Z0)fb(RT.X0,RT.Z0-0.06,0,RT.Z0,E2); // hidden under the porch roof where they overlap
-    sf(RT.X0,RT.Z0,0,RT.Z1,E2);
+    sf(RT.X0,RT.Z0,mx(THO_X),RT.Z1,E2);
     fb(RP.X0-0.06,RP.Z0,RP.X0,RP.Z1,E3);fb(RP.X0,RP.Z0-0.06,wx,RP.Z0,E3);if(RT.X0>RP.X0)fb(RP.X0,RP.Z1,RT.X0,RP.Z1+0.06,E3);fb(wx-0.06,RP.Z0,wx,hz0,E3);
     sf(RP.X0,RP.Z0,wx,Math.min(RP.Z1,hz9),E3);noMap=false;}
   const porchLamp=new THREE.MeshBasicMaterial({color:0xfff3c4}); // the big porch ceiling light (kept as it was)
@@ -718,7 +816,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     row('x',mx(4.0),RF.X1,(hz9+RF.Z1)/2,{face:hz9,n:'+z',from:0,to:hx14});           // main roof, back
     row('z',RF.Z0,RF.Z1,(hx14+RF.X1)/2,{face:hx14,n:'+x',from:0,to:hz9});             // main roof, west end
     row('x',RT.X0,mx(4.0),(hz9+RT.Z1)/2,{face:hz9,n:'+z',from:0,to:hx14});           // ancestor-room roof, back
-    row('z',Math.max(RT.Z0,RP.Z1),RT.Z1,(RT.X0+0)/2,{face:0,n:'-x',from:mz(4.95),to:hz9}); // ancestor-room roof, east
+    row('z',Math.max(RT.Z0,RP.Z1),RT.Z1,(RT.X0+mx(THO_X))/2,{face:mx(THO_X),n:'-x',from:mz(4.95),to:hz9}); // ancestor-room roof, east
     row('z',RP.Z0,RP.Z1,(RP.X0-0.8)/2);                                               // porch roof, east (over the yard)
     row('x',RP.X0,hx0,(RP.Z0+0)/2);                                                   // porch roof, side-path side
     /** Wall sconce at (x, y, z) world on a face with outward normal n: dark box, bulb, up/down wash, a real light. */
@@ -731,7 +829,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
       const l=new THREE.PointLight(0xffd59a,0,3.2,1.6);l.position.set(x+o[0]*3,y,z+o[1]*3);scene.add(l);lights.points.push({light:l,on:1.1*Math.PI});lights.sconces++;};
     sconce(-0.8-7,1.75,mz(0.175)-4.5,'-x');sconce(-0.8-7,1.75,mz(4.775)-4.5,'-x');   // porch columns, facing the yard
     const tw=map.windows.find(w=>w.spec.id==='w-tho')!.rect;                          // both sides of the ancestor-room window
-    sconce(-7,1.75,mz(tw[1])-0.4-4.5,'-x');sconce(-7,1.75,mz(tw[3])+0.4-4.5,'-x');
+    sconce(mx(THO_X)-7,1.75,mz(tw[1])-0.4-4.5,'-x');sconce(mx(THO_X)-7,1.75,mz(tw[3])+0.4-4.5,'-x');
     const pl=new THREE.PointLight(0xfff0d0,0,6,1.4);pl.position.set(mx(0.05)-7,E3-0.6,mz(2.475)-4.5);scene.add(pl);lights.points.push({light:pl,on:2.2*Math.PI});
     // ---- gypsum ceilings (trần thạch cao) at +3.2 in every room but the porch, and the indoor lights ----
     // The ceilings are downward-facing planes: seen from inside the rooms, invisible from above (overview with the
@@ -833,8 +931,16 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const C=0.22,MAXSPAN=5.0,FOOT=1.0;
     const Y={foot0:-1.6,foot1:-1.3,gb0:-0.7,gb1:-0.3,tie0:E1-0.3,tie1:E1};
     // wall centre lines in default plan coords: axis 'x' = runs along x at z = at
-    type Line={axis:'x'|'z';at:number;a0:number;a1:number};
+    type Line={axis:'x'|'z';at:number;a0:number;a1:number;/** ground beam only, no tie beam on top */noTie?:boolean};
     const lines:Line[]=WALLS.map(w=>(w[2]-w[0])>=(w[3]-w[1])?{axis:'x',at:(w[1]+w[3])/2,a0:w[0],a1:w[2]}:{axis:'z',at:(w[0]+w[2])/2,a0:w[1],a1:w[3]});
+    // The middle-wall beam runs on unbroken over the corridor → lavabo opening (x 11.45–13.2), and the WC1 / WC2
+    // partition beam (x = 12.51) is carried on through the lavabo to land on it, so no beam end is left open there.
+    {const sp=lines.filter(l=>l.axis==='x'&&Math.abs(l.at-5)<0.01);
+      if(sp.length>1){const one={...sp[0],a0:Math.min(...sp.map(l=>l.a0)),a1:Math.max(...sp.map(l=>l.a1))};
+        for(const l of sp)lines.splice(lines.indexOf(l),1);lines.push(one);}
+      const wc=lines.find(l=>l.axis==='z'&&Math.abs(l.at-12.51)<0.01);if(wc)wc.a0=5.0;
+      // no tie beam along the bedroom-3 / corridor wall (z = 4), by the owner's choice; it keeps its ground beam
+      const cor=lines.find(l=>l.axis==='x'&&Math.abs(l.at-4)<0.01);if(cor)cor.noTie=true;}
     const pts:[number,number][]=[];
     const addPt=(x:number,z:number)=>{if(!pts.some(p=>Math.abs(p[0]-x)<0.3&&Math.abs(p[1]-z)<0.3))pts.push([x,z]);};
     // openings on a line (default coords, along the line), to keep columns out of them
@@ -853,14 +959,17 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const facade:Line={axis:'x',at:0.1,a0:1.0,a1:14};
     // Bedroom 1 / 2 columns sit in the room corners (where the bedroom walls meet the middle wall: x = 2.6, 6.45,
     // 10.77), not mid-wall. The middle cross frame runs on the PN1/PN2 wall line x = 6.45 to the facade (the 0.8 m
-    // kitchen window sits just west of it). x = 10: column at the bedroom-3 / corridor corner; the short beam on to
-    // the middle wall lands on the middle-wall beam (no column there, it would stand in bedroom 2).
-    for(const p of [[1.1,0.1],[13.9,0.1],[13.9,4],[0.1,5],[1.1,5],[2.6,5],[6.45,5],[10.77,5],[0.1,8.9],[2.6,8.9],[6.45,8.9],[10.77,8.9],[13.9,8.9],[10.77,6.25],[13.9,6.25],[10,4]])addPt(p[0],p[1]);
+    // kitchen window sits just west of it). x = 10: no column at the bedroom-3 / corridor corner (owner's choice);
+    // the x = 10 beam runs from the facade column to the middle-wall beam. The corridor wall (z = 4) has no tie beam.
+    // The living-room front wall (x = 1.1) has no column where it meets the middle wall either: its beam lands on the
+    // middle-wall beam, so the ancestor room has columns only in its four corners.
+    // Bedroom 2 likewise has columns only in its corners: the lavabo / WC wall's beam (z = 6.25) lands on the x = 10.77 beam.
+    for(const p of [[1.1,0.1],[13.9,0.1],[13.9,4],[THO_X+0.1,5],[2.6,5],[6.45,5],[10.77,5],[THO_X+0.1,8.9],[2.6,8.9],[6.45,8.9],[10.77,8.9],[13.9,8.9],[13.9,6.25]])addPt(p[0],p[1]);
     const cross:Line[]=[];
     const mid=nudge(6.45,[facade],5.5,7.5);
     if(mid!==null){addPt(mid,0.1);cross.push({axis:'z',at:6.45,a0:0.1,a1:5.0});}
     addPt(10,0.1);
-    cross.push({axis:'z',at:10,a0:4.0,a1:5.0});
+    cross.push({axis:'z',at:10,a0:3.95,a1:5.0}); // joins the x = 10 wall beam (ends 3.95) with no gap
     // a column on the open beams and outside walls wherever a span grows past MAXSPAN (room stretched)
     for(const l of [...lines,...cross]){
       const on=pts.filter(p=>Math.abs((l.axis==='x'?p[1]:p[0])-l.at)<0.05).map(p=>l.axis==='x'?p[0]:p[1]).sort((p,q)=>p-q);
@@ -899,7 +1008,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
       if(l.axis==='x')sbox(p,c-C/2,q,c+C/2,y0,y1,mat);else sbox(c-C/2,p,c+C/2,q,y0,y1,mat);return q-p;};
     const rec=(l:Line,porch:boolean)=>{const p=l.axis==='x'?mx(l.a0):mz(l.a0),q=l.axis==='x'?mx(l.a1):mz(l.a1),c=l.axis==='x'?colZ((l.a0+l.a1)/2,l.at):mx(l.at);
       structure.beams.push(l.axis==='x'?{x0:p,z0:c,x1:q,z1:c,porch}:{x0:c,z0:p,x1:c,z1:q,porch});};
-    for(const l of lines){structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);structure.tieBeam+=beam(l,Y.tie0,Y.tie1,SM.tie);rec(l,false);}
+    for(const l of lines){structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);if(!l.noTie)structure.tieBeam+=beam(l,Y.tie0,Y.tie1,SM.tie);rec(l,false);}
     for(const l of [{axis:'z',at:-0.625,a0:0.11,a1:4.84},{axis:'x',at:0.11,a0:-0.625,a1:1.1},{axis:'x',at:4.84,a0:-0.625,a1:1.1}] as Line[])
       {structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);structure.tieBeam+=beam(l,PC,PC+0.3,SM.tie);rec(l,true);}
   }
