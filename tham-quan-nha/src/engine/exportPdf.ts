@@ -3,9 +3,9 @@
 // canvas (so Vietnamese text renders with the system fonts) around off-screen renders from Game.snapshot, and the
 // sheets are packed as JPEG pages into a small hand-written PDF (no PDF library needed).
 import type { Game } from './Game';
-import { COLOR_SPECS, GROUND, MAIN_SIDE, MAIN_TRANSOM, PORCH_COL, PORCH_EAVE, THO_SCREEN, THO_X, fmtM, type Dir } from './layout';
+import { COLOR_SPECS, GROUND, MAIN_SIDE, MAIN_TRANSOM, PORCH_COL, PORCH_DROP, PORCH_EAVE, PORCH_NZ, THO_SCREEN, THO_X, WALL_H, fmtM, type Dir } from './layout';
 import { CIRCUITS, ELEC, MAIN_BREAKER, SERVICE_IN, type ElecKind } from './electrical';
-import { FLOOR_DRAINS, MANHOLES, PIPES, PIPE_STYLE, SEPTIC, SHAFT, SOLAR, TANK, TAPS, VALVES, type PipeKind } from './plumbing';
+import { FLOOR_DRAINS, MANHOLES, PIPES, PIPE_STYLE, ROOF_DRAIN, SEPTIC, SHAFT, SOLAR, TANK, TAPS, VALVES, type PipeKind } from './plumbing';
 
 type V3 = [number, number, number];
 const PW = 2480, PH = 1754;                    // A3 landscape at 150 dpi
@@ -105,9 +105,9 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   const W = (x: number, z: number): [number, number] => [x - 7, MZ === null ? z - 4.5 : MZ - (z - 4.5)];
   const hx0 = map.mx(0) - 7, hx1 = map.mx(14) - 7, zA = W(0, map.mz(0))[1], zB = W(0, map.mz(9))[1];
   const hz0 = Math.min(zA, zB), hz1 = Math.max(zA, zB);
-  const E1 = 4.1, E3 = 3.42, ridge = E1 + F.rise, size = `${fmtM(map.houseD)} × ${fmtM(map.houseW)}`;
+  const E1 = WALL_H, E3 = WALL_H - PORCH_DROP, ridge = E1 + F.rise, size = `${fmtM(map.houseD)} × ${fmtM(map.houseW)}`;
   const date = new Date().toLocaleDateString('vi-VN');
-  const TOTAL = 39;
+  const TOTAL = 44;
 
   // ---------------- renders ----------------
   onProgress('Đang dựng hình phối cảnh…');
@@ -171,6 +171,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   for (const v of views3d) await snap(v.k, { pos: v.pos, target: v.target, fov: v.fov }, { w: GW, h: GH, roof: v.roof });
   // close-ups for the door / column detail sheets (CT-01, CT-02)
   await snap('doorD1', { pos: V(-1.9, 1.45, 1.9), target: V(1.0, 1.45, 2.475), fov: 66 }, { w: 900, h: 1200, roof: true });
+  await snap('cornice', { pos: V(15.4, 3.1, -1.8), target: V(14.3, 4.0, -0.35), fov: 50 }, { w: 900, h: 700, roof: true });
   await snap('colP', { pos: V(-3.3, 1.55, -1.7), target: V(-1.275, 1.45, 0.11), fov: 64 }, { w: 800, h: 1300, roof: true });
 
   // plumbing 3D (house ghosted) and one section per room (vertical cut through the room's centre, along its
@@ -223,10 +224,13 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       ['Đảo ngược bố cục', MZ === null ? 'Không' : 'Có (sảnh ở phía bên kia)'],
     ], 34, 19) + 40;
     heading(g, 'DANH MỤC BẢN VẼ', x, y += 10);
-    table(g, x, y + 30, [{ t: 'Ký hiệu', w: 150 }, { t: 'Tên bản vẽ', w: 680 }], [
+    const sheetList: string[][] = [
       ['KT-00', 'Trang bìa & tổng quan'], ['KT-01', 'Mặt bằng bố trí & kích thước'], ['KT-01B', 'Mặt bằng 3D (bỏ mái)'], ['KT-02', 'Mặt đứng chính (Nam) & mặt đứng sau (Bắc)'],
-      ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-04B', 'Bố trí cây chống'], ['KT-04C', 'Bố trí cầu phong'], ['KT-04D', 'Bố trí li tô'], ['KT-04E', 'Chi tiết kết cấu mái'], ['KT-04F', 'Ngói lợp & thống kê vật tư mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-05B', 'Định vị cột C, dầm D'], ['KC-01', 'Mặt bằng kết cấu móng'], ['KC-02', 'Chi tiết móng, cột, dầm'], ['KC-03', 'Trình tự thi công móng'], ['KC-04', 'Thống kê cốt thép & bê tông'], ['KC-05', 'Mặt bằng đổ sàn mái BTCT'], ['KC-06', 'Mặt cắt & trục đo sàn mái, điểm giao 3 mái'], ['BP-01', 'Chi tiết bể phốt 3 ngăn'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-06B', 'Thống kê gạch ốp lát'], ['CT-01', 'Chi tiết cửa đi D1'], ['CT-02', 'Chi tiết cột hiên'], ['KT-07', 'Thống kê nội thất'], ['KT-08', 'Sơ đồ đèn (chiếu sáng)'], ['KT-08B', 'Mặt bằng ổ cắm & điều hoà'], ['KT-08C', 'Mặt bằng trần thạch cao, đèn, quạt'], ['KT-09', 'Sơ đồ nguyên lý tủ điện & phụ tải'], ['KT-09C', 'Sơ đồ đi dây cấp điện ổ cắm, công tắc'], ['KT-09B', 'Sơ đồ mạng & đường dây vào nhà'], ['KT-10', 'Cấp thoát nước & hộp kỹ thuật'], ['KT-10B', 'Chi tiết cấp thoát nước WC1'], ['KT-10C', 'Chi tiết cấp thoát nước WC2 & khu giặt'], ['KT-10D', 'Phối cảnh 3D hệ thống nước'], ['KT-11', 'Mặt cắt các phòng (1)'], ['KT-12', 'Mặt cắt các phòng (2)'], ['KT-13', 'Phối cảnh ngoại thất 3D'], ['KT-14', 'Phối cảnh nội thất 3D'],
-    ], 25, 15);
+      ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-04B', 'Bố trí cây chống'], ['KT-04C', 'Bố trí cầu phong'], ['KT-04D', 'Bố trí li tô'], ['KT-04E', 'Chi tiết kết cấu mái'], ['KT-04F', 'Ngói lợp & thống kê vật tư mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-05B', 'Định vị cột C, dầm D'], ['KC-01', 'Mặt bằng kết cấu móng'], ['KC-02', 'Chi tiết móng, cột, dầm'], ['KC-03', 'Trình tự thi công móng'], ['KC-04', 'Thống kê cốt thép & bê tông'], ['KC-04B', 'Móng bè: định vị 1500 cọc tre'], ['KC-04C', 'Móng bè: mặt cắt, dầm sườn, cụm cọc'], ['KC-04D', 'Móng bè: thép bản & thống kê'], ['KC-05', 'Mặt bằng đổ sàn mái BTCT'], ['KC-06', 'Mặt cắt & trục đo sàn mái, điểm giao 3 mái'], ['KC-07', 'Mặt cắt, độ dày lớp mái, chi tiết mái đua & ô thoát'], ['KC-08', 'Chi tiết phào mái'], ['BP-01', 'Chi tiết bể phốt 3 ngăn'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-06B', 'Thống kê gạch ốp lát'], ['CT-01', 'Chi tiết cửa đi D1'], ['CT-02', 'Chi tiết cột hiên'], ['KT-07', 'Thống kê nội thất'], ['KT-08', 'Sơ đồ đèn (chiếu sáng)'], ['KT-08B', 'Mặt bằng ổ cắm & điều hoà'], ['KT-08C', 'Mặt bằng trần thạch cao, đèn, quạt'], ['KT-09', 'Sơ đồ nguyên lý tủ điện & phụ tải'], ['KT-09C', 'Sơ đồ đi dây cấp điện ổ cắm, công tắc'], ['KT-09B', 'Sơ đồ mạng & đường dây vào nhà'], ['KT-10', 'Cấp thoát nước & hộp kỹ thuật'], ['KT-10B', 'Chi tiết cấp thoát nước WC1'], ['KT-10C', 'Chi tiết cấp thoát nước WC2 & khu giặt'], ['KT-10D', 'Phối cảnh 3D hệ thống nước'], ['KT-11', 'Mặt cắt các phòng (1)'], ['KT-12', 'Mặt cắt các phòng (2)'], ['KT-13', 'Phối cảnh ngoại thất 3D'], ['KT-14', 'Phối cảnh nội thất 3D'],
+    ];
+    { const h2 = Math.ceil(sheetList.length / 2); // two columns so the 40+ sheets fit
+      table(g, x, y + 30, [{ t: 'Ký hiệu', w: 92 }, { t: 'Tên bản vẽ', w: 330 }, { t: 'Ký hiệu', w: 92 }, { t: 'Tên bản vẽ', w: 330 }],
+        Array.from({ length: h2 }, (_, r) => [...sheetList[r], ...(sheetList[r + h2] ?? ['', ''])]), 27, 13); }
     pages.push(c);
   }
 
@@ -427,7 +431,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     const note = (x: number, z: number, dx: number, dy: number, lines: string[]) => { const q = planP(x, z); g.strokeStyle = INK; g.lineWidth = 1.6; ln(g, q, [q[0] + dx, q[1] + dy]); g.fillStyle = INK; g.font = `600 17px ${FONT}`; lines.forEach((l, i) => g.fillText(l, q[0] + dx + (dx < 0 ? -g.measureText(l).width - 6 : 6), q[1] + dy + i * 22)); };
     note(F.X0 + (F.X1 - F.X0) * 0.55, F.Z0, 0, 60, ['MÁI ĐUA BTCT 600 SO VỚI TƯỜNG + NGÓI THÒ 80']);
     note(F.X1, (F.Z0 + F.Z1) / 2 - 1.5, -80, 0, ['MÁI ĐUA BTCT 600', 'SO VỚI TƯỜNG + NGÓI 80']);
-    { const q = planP(R.sanh.X0, R.sanh.Z0 + 0.6); g.fillStyle = INK; g.font = `600 17px ${FONT}`; g.fillText('MÁI ĐUA BTCT 710 SO VỚI TIM CỘT + NGÓI 80 (THẲNG MÉP MÁI CHÍNH)', q[0] + 12, q[1] - 30); }
+    { const q = planP(R.sanh.X0, R.sanh.Z0 + 0.6); g.fillStyle = INK; g.font = `600 17px ${FONT}`; g.fillText('MÁI ĐUA: BTCT 650 + PHÀO 60 = 710 TỪ TIM CỘT, NGÓI +80 (THẲNG MÉP MÁI CHÍNH)', q[0] + 12, q[1] - 30); }
     for (const [x, z] of RFm.downpipes) { const q = planP(x, z); g.fillStyle = '#2f7fd8'; g.font = `600 15px ${FONT}`; g.fillText('ỐNG THOÁT Ø90 TRONG CỘT', q[0] + 16, q[1] - 12); }
     const lx = planBox.X + planBox.W + 70; let ly = M + 150; northArrow(g, lx + 40, ly + 40); ly += 140;
     heading(g, 'THÔNG SỐ MÁI', lx, ly);
@@ -437,7 +441,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       ['Mái sảnh', `${fmtM(R.sanh.L)} × ${fmtM(R.sanh.W)}`, level(E3), level(E3 + R.sanh.rise)],
     ], 36, 18) + 30;
     ly = table(g, lx, ly, [{ t: 'Hạng mục', w: 270 }, { t: 'Giá trị', w: 330 }], [
-      ['Độ dốc mái', `${slopeTxt} (≈ ${(Math.atan(RFm.t) * 180 / Math.PI).toFixed(1)}°)`], ['Mái đua BTCT', '600 so với mặt tường · sảnh 710 so với tim cột (mép ngói thẳng mép mái chính)'], ['Ngói thò ra', '80 so với mép bê tông'],
+      ['Độ dốc mái', `${slopeTxt} (≈ ${(Math.atan(RFm.t) * 180 / Math.PI).toFixed(1)}°)`], ['Mái đua BTCT', 'BTCT 540 + phào 60 = 600 từ mặt tường · sảnh 650 + 60 = 710 từ tim cột'], ['Ngói thò ra', '80 so với mép bê tông'],
       ['Sàn mái BTCT', `dày 100, mặt ${level(E1)}`], ['Diện tích lợp ngói', `≈ ${tiledArea.toFixed(1)} m² (theo dốc)`],
       ['Nóc / rìa (hip) / máng xối', `${RFm.ridge.toFixed(1)} / ${RFm.hips.toFixed(1)} / ${RFm.valley.toFixed(1)} m`], ['Ống thoát nước mái', `${RFm.downpipes.length} ống uPVC Ø90 (cuối máng xối)`],
       ['Mái bằng BTCT khu WC', `${fmtM(F.X1 - fxF)} × ${fmtM(F.Z1 - fzF)} m, lan can 0.3 m`], ['Téc nước inox (giữ nguyên)', '1500 L · Φ1140 × L1750 · ≈ 1.7 tấn khi đầy'],
@@ -833,8 +837,8 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     sec(cxs + 300, cy0, 220, 220, sq(220, 220, 18), 18, `C2 (SL ${nC('C2')})`, ['220×220 · 4Ø18', 'Đai Ø8a150']);
     sec(cxs + 600, cy0, 220, 220, sq(220, 220, 16), 16, `C3 (SL ${nC('C3')})`, ['220×220 · 4Ø16 (lõi cột hiên)', 'Đai Ø8a150, ốp phào ngoài']);
     sec(cxs, cy0 + 380, 220, 400, [...sq(220, 400, 16)], 16, 'DM — dầm móng', ['220×400 · 2Ø16 trên + 2Ø16 dưới', 'Đai Ø8a150, đỉnh −0.300']);
-    sec(cxs + 300, cy0 + 380, 220, 300, sq(220, 300, 14), 14, 'DG — dầm giằng tường', ['220×300 · 2Ø14 + 2Ø14', 'Đai Ø6a200, đỉnh +4.100']);
-    sec(cxs + 600, cy0 + 380, 220, 300, sq(220, 300, 16), 16, 'DH — dầm hiên', ['220×300 · 2Ø16 + 2Ø16', 'Đai Ø8a150, đáy +2.920']);
+    sec(cxs + 300, cy0 + 380, 220, 300, sq(220, 300, 14), 14, 'DG — dầm giằng tường', ['220×300 · 2Ø14 + 2Ø14', `Đai Ø6a200, đỉnh ${level(E1)}`]);
+    sec(cxs + 600, cy0 + 380, 220, 300, sq(220, 300, 16), 16, 'DH — dầm hiên', ['220×300 · 2Ø16 + 2Ø16', `Đai Ø8a150, đáy ${level(E3 - 0.5)}`]);
     noteLines(g, cxs, cy0 + 880, 900, ['Dầm móng hiên vươn console từ nhà ra đỡ 2 cột C3 (không móng riêng).', 'Cột C ở tường 110 lệch tâm, mặt cột bằng mặt tường phía phòng khách.'], 17, 26);
     pages.push(c);
   }
@@ -878,7 +882,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     const groups: { name: string; bars: Bar[] }[] = [];
     for (const f of FOOTS) { const n = footN(f.t); if (!n) continue; const nb = meshN(f.B), L = Math.round(f.B * 1000 - 80);
       groups.push({ name: `${f.t} (SL ${n})`, bars: [{ stt: '1', shape: `thẳng ${L}`, d: 12, L, n1: nb, n: nb * n }, { stt: '2', shape: `thẳng ${L}`, d: 12, L, n1: nb, n: nb * n }] }); }
-    const colH = 4.1 + 1.95, porH = 2.92 + 0.65;
+    const colH = E1 + 1.95, porH = E3 - 0.5 + 0.65;
     for (const ct of ['C1', 'C2', 'C3']) { const n = S2.cols.filter(c2 => c2.ct === ct).length; if (!n) continue; const H = ct === 'C3' ? porH : colH, d0 = ct === 'C2' ? 18 : 16, L = Math.round(H * 1000 + 150 + 300);
       groups.push({ name: `${ct} (SL ${n})`, bars: [{ stt: '3', shape: `150┘ ${Math.round(H * 1000)} └300`, d: d0, L, n1: 4, n: 4 * n }, { stt: 'S1', shape: '□ 170×170 + móc 80', d: 8, L: 840, n1: Math.ceil(H / 0.15) + 1, n: (Math.ceil(H / 0.15) + 1) * n }] }); }
     const gb = S2.groundBeam, tb = S2.tieBeam;
@@ -978,6 +982,161 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     pages.push(c);
   }
 
+  // ---------------- KC-04B / C / D alternative (PDF only): raft foundation on 1500 bamboo piles (móng bè cọc tre) ----------------
+  // Raft slab 250 (top −1.200) over the house + ancestor room + porch columns, 300 past the outer walls; ribs DS 300 × 700
+  // (to −1.900) under every frame line. Owner: 1500 bamboo piles in all, so they go where the load is: a 5 × 5 cluster
+  // (200 c/c) under every column, three rows under every rib at the pitch that makes the total exactly 1500; the slab
+  // between the ribs bears on the compacted sand.
+  const RAFT = { top: -1.2, slab: 0.25, rib: 0.7, ribW: 0.3, edge: 0.3, pileL: 2.5, total: 1500 };
+  const raftRects: [number, number, number, number][] = [   // default plan coords
+    [1.0 - RAFT.edge, -RAFT.edge, 14 + RAFT.edge, 9 + RAFT.edge], [THO_X - RAFT.edge, 4.95 - RAFT.edge, 1.0, 9 + RAFT.edge], [PORCH_COL - 0.5, 0.11 - 0.5, 1.0, PORCH_NZ + 0.5]];
+  const raftArea = (() => { let n = 0; for (let x = -2.5; x < 14.6; x += 0.05) for (let z = -0.6; z < 9.6; z += 0.05) if (raftRects.some(r => x >= r[0] && x < r[2] && z >= r[1] && z < r[3])) n++; return n * 0.0025; })();
+  const ribs = S2.beams.map((b, i) => ({ ...b, id: `DS${i + 1}`, L: Math.hypot(b.x1 - b.x0, b.z1 - b.z0), edge: false }));
+  { const xs = ribs.flatMap(b => [b.x0, b.x1]), zs = ribs.flatMap(b => [b.z0, b.z1]), mnx = Math.min(...xs), mxx = Math.max(...xs), mnz = Math.min(...zs), mxz = Math.max(...zs);
+    for (const b of ribs) b.edge = (Math.abs(b.z0 - b.z1) < 0.01 && (Math.abs(b.z0 - mnz) < 0.3 || Math.abs(b.z0 - mxz) < 0.3)) || (Math.abs(b.x0 - b.x1) < 0.01 && (Math.abs(b.x0 - mnx) < 0.3 || Math.abs(b.x0 - mxx) < 0.3)) || b.porch; }
+  const colPiles: [number, number][] = S2.cols.flatMap(c2 => { const o: [number, number][] = []; for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) o.push([c2.x + i * 0.2, c2.z + j * 0.2]); return o; });
+  const ribPilesAt = (s: number) => { const out: { p: [number, number]; rib: string }[] = [], all: [number, number][] = [...colPiles];
+    for (const b of ribs) { const ux = (b.x1 - b.x0) / b.L, uz = (b.z1 - b.z0) / b.L;
+      for (let a = 0.1; a <= b.L - 0.1 + 1e-6; a += s) for (const o of [-0.2, 0, 0.2]) { const p: [number, number] = [b.x0 + ux * a - uz * o, b.z0 + uz * a + ux * o];
+        if (S2.cols.some(c2 => Math.abs(c2.x - p[0]) < 0.5 && Math.abs(c2.z - p[1]) < 0.5) || all.some(q => Math.abs(q[0] - p[0]) < 0.12 && Math.abs(q[1] - p[1]) < 0.12)) continue;
+        all.push(p); out.push({ p, rib: b.id }); } }
+    return out; };
+  // largest pitch with at least the needed rib piles, then trim the extras evenly → exactly 1500
+  const needRib = RAFT.total - colPiles.length;
+  let pitch = 0.2; { let lo = 0.1, hi = 1.2; for (let it = 0; it < 22; it++) { const m = (lo + hi) / 2; if (ribPilesAt(m).length >= needRib) { lo = m; } else hi = m; } pitch = lo; }
+  const ribPiles = (() => { const r = ribPilesAt(pitch), extra = r.length - needRib; if (extra <= 0) return r; const drop = new Set<number>(); for (let k = 0; k < extra; k++) drop.add(Math.floor((k + 0.5) * r.length / extra)); return r.filter((_, i) => !drop.has(i)); })();
+  const pilesByRib = new Map<string, number>(); for (const q of ribPiles) pilesByRib.set(q.rib, (pilesByRib.get(q.rib) ?? 0) + 1);
+  const ribLen = ribs.reduce((a, b) => a + b.L, 0);
+  {
+    const { c, g, top: t } = page('MẶT BẰNG MÓNG BÈ CỌC TRE', 'KC-04B', pages.length + 1, TOTAL, date, size);
+    heading(g, `PHƯƠNG ÁN MÓNG BÈ — ĐỊNH VỊ ${RAFT.total} CỌC TRE`, planBox.X, M + 70, `Bản móng ${mm(RAFT.slab)} mặt ${level(RAFT.top)} · dầm sườn DS ${mm(RAFT.ribW)}×${mm(RAFT.rib)} · cụm 25 cọc dưới chân cột, 3 hàng cọc dưới dầm sườn bước ≈ ${mm(pitch)} · thay cho móng đơn KC-01`);
+    const PD = (x: number, z: number) => planP(map.mx(x), map.mz(z));
+    const rr = (x0: number, z0: number, x1: number, z1: number) => { const a = PD(x0, z0), b = PD(x1, z1); return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])] as [number, number, number, number]; };
+    g.fillStyle = 'rgba(166,124,82,.10)'; for (const r of raftRects) g.fillRect(...rr(...r));
+    g.strokeStyle = INK; g.lineWidth = 3; for (const r of raftRects) g.strokeRect(...rr(...r));
+    g.globalAlpha = 0.22; drawBase(g, false); g.globalAlpha = 1;
+    for (const b of ribs) { const p = planP(b.x0, b.z0), q = planP(b.x1, b.z1), hw = Math.abs(planP(b.x0 + RAFT.ribW / 2, b.z0)[0] - p[0]), v = Math.abs(q[1] - p[1]) > Math.abs(q[0] - p[0]);
+      const r: [number, number, number, number] = v ? [p[0] - hw, Math.min(p[1], q[1]) - hw, 2 * hw, Math.abs(q[1] - p[1]) + 2 * hw] : [Math.min(p[0], q[0]) - hw, p[1] - hw, Math.abs(q[0] - p[0]) + 2 * hw, 2 * hw];
+      g.fillStyle = b.edge ? 'rgba(160,80,30,.35)' : 'rgba(184,106,44,.25)'; g.fillRect(...r); g.strokeStyle = 'rgba(120,60,20,.9)'; g.lineWidth = 1; g.strokeRect(...r); }
+    // piles: column clusters (dark) and rib rows (brown)
+    for (const [x, z] of colPiles) { const [px, py] = planP(x, z); g.fillStyle = '#5a3a1a'; g.beginPath(); g.arc(px, py, 2.6, 0, Math.PI * 2); g.fill(); }
+    for (const { p } of ribPiles) { const [px, py] = planP(p[0], p[1]); g.fillStyle = '#a0703a'; g.beginPath(); g.arc(px, py, 2.2, 0, Math.PI * 2); g.fill(); }
+    for (const c2 of S2.cols) { const [x, y] = planP(c2.x, c2.z), hs = Math.abs(planP(c2.x + 0.11, c2.z)[0] - x); g.fillStyle = '#c23b2e'; g.fillRect(x - hs, y - hs, 2 * hs, 2 * hs); }
+    for (const b of ribs) { const f = [0.5, 0.3, 0.7].find(f2 => !S2.cols.some(c2 => Math.hypot(c2.x - (b.x0 + (b.x1 - b.x0) * f2), c2.z - (b.z0 + (b.z1 - b.z0) * f2)) < 0.8)) ?? 0.5;
+      const [px, py] = planP(b.x0 + (b.x1 - b.x0) * f, b.z0 + (b.z1 - b.z0) * f); g.font = `700 14px ${FONT}`; const tw = g.measureText(b.id).width + 8; g.fillStyle = 'rgba(255,255,255,.92)'; g.fillRect(px - tw / 2, py - 22, tw, 18); g.fillStyle = '#7a3e10'; g.textAlign = 'center'; g.fillText(b.id, px, py - 8); g.textAlign = 'left'; }
+    drawAxes(g, zLo, zHi, xLo, xHi);
+    dimLine(g, PD(1.0 - RAFT.edge, -RAFT.edge - 0.6), PD(14 + RAFT.edge, -RAFT.edge - 0.6), mm(13 + 2 * RAFT.edge), [0, 0]);
+    dimLine(g, PD(14 + RAFT.edge + 0.6, -RAFT.edge), PD(14 + RAFT.edge + 0.6, 9 + RAFT.edge), mm(9 + 2 * RAFT.edge), [0, 0]);
+    dimLine(g, PD(PORCH_COL - 0.5, 0.11 - 0.8), PD(1.0 - RAFT.edge, 0.11 - 0.8), mm(1.0 - RAFT.edge - PORCH_COL + 0.5), [0, 0]);
+    dimLine(g, PD(14, 4.5), PD(14 + RAFT.edge, 4.5), mm(RAFT.edge), [0, -22]);
+    const lx = planBox.X + planBox.W + 50, lw = PW - M - 30 - lx; let ly = t + 40;
+    heading(g, 'CỌC TRE', lx, ly);
+    ly = table(g, lx, ly + 24, [{ t: 'Vị trí', w: 300 }, { t: 'Bố trí', w: 190 }, { t: 'Số cọc', w: 110, right: true }], [
+      [`Chân cột (${S2.cols.length} cột)`, '5 × 5, 200 c/c', String(colPiles.length)], [`Dưới dầm sườn (${ribLen.toFixed(1)} m)`, `3 hàng, bước ≈ ${mm(pitch)}`, String(ribPiles.length)],
+      ['TỔNG', 'Ø60–80, L 2.5 m', String(colPiles.length + ribPiles.length)]], 32, 15) + 20;
+    ly = noteLines(g, lx, ly + 8, lw, ['Chấm đậm: cụm cọc chân cột; chấm nâu: cọc dưới dầm sườn.', 'Bản móng giữa các dầm sườn tựa trên cát đen đầm chặt K95,', 'không đóng cọc. Số cọc từng dầm: bảng KC-04D.',
+      'Cọc tre tươi, già ≥ 2 năm, thẳng, đầu to Ø ≥ 60, chặt vát mũi.', 'Đóng theo thứ tự từ ngoài vào trong, từ biên vào giữa.', 'Đầu cọc phải luôn nằm dưới mực nước ngầm thấp nhất.',
+      'Thay cho móng đơn KC-01 khi nền yếu; kỹ sư kết cấu kiểm tra', 'lại theo kết quả khảo sát địa chất trước khi thi công.'], 16, 25);
+    pages.push(c);
+  }
+  {
+    const { c, g, top: t } = page('CHI TIẾT MÓNG BÈ CỌC TRE', 'KC-04C', pages.length + 1, TOTAL, date, size);
+    heading(g, 'CHI TIẾT MÓNG BÈ CỌC TRE — MẶT CẮT, DẦM SƯỜN, CỤM CỌC', M + 60, M + 70, 'mm · cao độ m (±0.000 = mặt nền nhà)');
+    // generic section across the raft: edge rib (with the 300 toe) … slab … inner rib (with its column), piles only under the ribs
+    const drawSec = (X0: number, Y0: number, k: number, title: string, atCol: boolean) => {
+      const X = (v: number) => X0 + v * k, Ym = (y: number) => Y0 - y * k, L = 3000;
+      g.fillStyle = INK; g.font = `800 23px ${FONT}`; g.fillText(title, X0 - 100, Y0 - 60);
+      g.strokeStyle = '#9a8f7c'; g.lineWidth = 2; g.beginPath(); g.moveTo(X(-600), Ym(-760)); g.lineTo(X(L + 300), Ym(-760)); g.stroke();
+      // sand + lean under the slab and (deeper) under the ribs
+      g.fillStyle = '#e8d9a8'; g.fillRect(X(-450), Ym(-1450), (L + 600) * k, 100 * k); g.fillStyle = '#d9d2c4'; g.fillRect(X(-450), Ym(-1550), (L + 600) * k, 100 * k);
+      for (const xc of [0, L]) { g.fillStyle = '#e8d9a8'; g.fillRect(X(xc - 300), Ym(-2000), 600 * k, 100 * k); dots(g, X(xc - 300), Ym(-1900), 600 * k, 100 * k); }
+      // piles: three under each rib (cut across) — or the 5-pile row of a column cluster
+      g.strokeStyle = '#8a6a3a'; g.lineWidth = 4;
+      for (const xc of [0, L]) for (const o of (atCol && xc === L ? [-400, -200, 0, 200, 400] : [-200, 0, 200])) { g.beginPath(); g.moveTo(X(xc + o), Ym(-2000)); g.lineTo(X(xc + o), Ym(-2000 - 2500 * 0.45)); g.stroke();
+        g.beginPath(); g.moveTo(X(xc + o) - 4, Ym(-2000 - 2500 * 0.45)); g.lineTo(X(xc + o), Ym(-2000 - 2500 * 0.45) + 12); g.lineTo(X(xc + o) + 4, Ym(-2000 - 2500 * 0.45)); g.stroke(); }
+      // concrete
+      g.fillStyle = '#c9c5bc'; g.strokeStyle = INK; g.lineWidth = 2.2;
+      g.beginPath(); g.moveTo(X(-450), Ym(-1200)); g.lineTo(X(L + 150), Ym(-1200)); g.lineTo(X(L + 150), Ym(-1900)); g.lineTo(X(L - 150), Ym(-1900)); g.lineTo(X(L - 150), Ym(-1450));
+      g.lineTo(X(150), Ym(-1450)); g.lineTo(X(150), Ym(-1900)); g.lineTo(X(-150), Ym(-1900)); g.lineTo(X(-150), Ym(-1450)); g.lineTo(X(-450), Ym(-1450)); g.closePath(); g.fill(); g.stroke();
+      g.strokeStyle = '#b4532a'; g.lineWidth = 2; for (const y of [-1240, -1410]) { g.beginPath(); g.moveTo(X(-420), Ym(y)); g.lineTo(X(L + 120), Ym(y)); g.stroke(); }
+      for (const xc of [0, L]) { g.strokeRect(X(xc - 115), Ym(-1235), 230 * k, 630 * k); g.fillStyle = '#b4532a'; for (const [dx, dy] of [[-95, -1255], [0, -1255], [95, -1255], [-95, -1845], [0, -1845], [95, -1845]]) { g.beginPath(); g.arc(X(xc + dx), Ym(dy), 3.5, 0, Math.PI * 2); g.fill(); } }
+      if (atCol) { g.fillStyle = '#f2e6dc'; g.fillRect(X(L - 110), Ym(0), 220 * k, 1200 * k); g.strokeStyle = INK; g.lineWidth = 1.6; g.strokeRect(X(L - 110), Ym(0), 220 * k, 1200 * k);
+        g.strokeStyle = '#b4532a'; g.lineWidth = 2.4; for (const dx of [-80, 80]) { g.beginPath(); g.moveTo(X(L + dx + (dx > 0 ? 150 : -150)), Ym(-1840)); g.lineTo(X(L + dx), Ym(-1840)); g.lineTo(X(L + dx), Ym(300)); g.stroke(); } }
+      for (const xc of atCol ? [0] : [0, L]) { hatch(g, X(xc - 110), Ym(-300), 220 * k, 900 * k, 9); g.strokeStyle = INK; g.lineWidth = 1.4; g.strokeRect(X(xc - 110), Ym(-300), 220 * k, 900 * k); }
+      g.fillStyle = 'rgba(184,106,44,.35)'; g.fillRect(X(-110), Ym(-300), 220 * k, 400 * k);
+      g.fillStyle = '#e9e6df'; g.fillRect(X(110), Ym(0), (L - 220) * k, 300 * k); g.strokeStyle = INK; g.lineWidth = 1.2; g.strokeRect(X(110), Ym(0), (L - 220) * k, 300 * k);
+      for (const [y, s] of [[0, '±0.000'], [-300, '−0.300'], [-760, '−0.760 sân'], [-1200, '−1.200'], [-1450, '−1.450'], [-1900, '−1.900'], [-2100, '−2.100']] as [number, string][]) lvl(g, X(L + 380), Ym(y), s);
+      dimLine(g, [X(-450), Ym(-1200)], [X(-150), Ym(-1200)], '300', [0, -34]); dimLine(g, [X(-150), Ym(-1900)], [X(150), Ym(-1900)], '300', [0, 120]);
+      dimLine(g, [X(-470), Ym(-1200)], [X(-470), Ym(-1450)], '250', [-36, 0]); dimLine(g, [X(-470), Ym(-1200)], [X(-470), Ym(-1900)], '700', [-80, 0]);
+      dimLine(g, [X(-470), Ym(-1900)], [X(-470), Ym(-2100)], '200', [-36, 0]); dimLine(g, [X(-200), Ym(-2400)], [X(200), Ym(-2400)], '200 + 200', [0, 0]);
+    };
+    drawSec(M + 260, t + 250, 0.3, 'MẶT CẮT 1-1 (DẦM SƯỜN BIÊN — BẢN — DẦM SƯỜN GIỮA)', false);
+    drawSec(M + 260, t + 1000, 0.3, 'MẶT CẮT 2-2 (QUA CHÂN CỘT, CỤM 25 CỌC)', true);
+    // rib cross-sections, pile cluster + rib row plans, pile head detail
+    const rx = M + 1420;
+    const ribSec = (x: number, y: number, title: string, top: number, bot: number) => { const kk = 0.42; g.fillStyle = '#efe9e1'; g.fillRect(x, y, 300 * kk, 700 * kk); g.strokeStyle = INK; g.lineWidth = 2; g.strokeRect(x, y, 300 * kk, 700 * kk);
+      g.strokeStyle = '#b4532a'; g.strokeRect(x + 25 * kk, y + 25 * kk, 250 * kk, 650 * kk); g.fillStyle = '#b4532a';
+      for (let i = 0; i < top; i++) { g.beginPath(); g.arc(x + (45 + i * 210 / Math.max(1, top - 1)) * kk, y + 45 * kk, 4.5, 0, Math.PI * 2); g.fill(); }
+      for (let i = 0; i < bot; i++) { g.beginPath(); g.arc(x + (45 + i * 210 / Math.max(1, bot - 1)) * kk, y + 655 * kk, 4.5, 0, Math.PI * 2); g.fill(); }
+      g.beginPath(); g.arc(x + 45 * kk, y + 350 * kk, 3.5, 0, Math.PI * 2); g.arc(x + 255 * kk, y + 350 * kk, 3.5, 0, Math.PI * 2); g.fill();
+      dimLine(g, [x, y + 700 * kk], [x + 300 * kk, y + 700 * kk], '300', [0, 30]); dimLine(g, [x + 300 * kk, y], [x + 300 * kk, y + 700 * kk], '700', [30, 0]);
+      g.fillStyle = INK; g.font = `800 19px ${FONT}`; g.fillText(title, x - 10, y - 14); g.font = `400 15px ${FONT}`;
+      g.fillText(`${top}Ø18 trên, ${bot}Ø18 dưới`, x - 10, y + 700 * kk + 60); g.fillText('2Ø12 giá, đai Ø8a150 (a100 đầu)', x - 10, y + 700 * kk + 80); };
+    ribSec(rx, t + 140, 'DS biên', 3, 3); ribSec(rx + 260, t + 140, 'DS giữa', 3, 4);
+    { const cx = rx + 560, cy = t + 140, pk = 0.2; g.fillStyle = INK; g.font = `800 19px ${FONT}`; g.fillText('CỤM 25 CỌC CHÂN CỘT', cx, cy - 14);
+      g.strokeStyle = INK; g.lineWidth = 1.5; g.strokeRect(cx, cy, 1000 * pk, 1000 * pk); g.fillStyle = '#c23b2e'; g.fillRect(cx + 390 * pk, cy + 390 * pk, 220 * pk, 220 * pk);
+      for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) { g.fillStyle = '#5a3a1a'; g.beginPath(); g.arc(cx + (100 + 200 * i) * pk, cy + (100 + 200 * j) * pk, 5, 0, Math.PI * 2); g.fill(); }
+      dimLine(g, [cx, cy + 1000 * pk], [cx + 1000 * pk, cy + 1000 * pk], '1000', [0, 30]); dimLine(g, [cx + 100 * pk, cy], [cx + 300 * pk, cy], '200', [0, -20]); }
+    { const cx = rx + 560, cy = t + 470, pk = 0.2, Lr = 1400; g.fillStyle = INK; g.font = `800 19px ${FONT}`; g.fillText('HÀNG CỌC DƯỚI DẦM SƯỜN', cx, cy - 14);
+      g.fillStyle = 'rgba(184,106,44,.25)'; g.fillRect(cx, cy + 150 * pk, Lr * pk, 300 * pk); g.strokeStyle = INK; g.lineWidth = 1; g.strokeRect(cx, cy, Lr * pk, 600 * pk);
+      for (let a = 100; a < Lr; a += pitch * 1000) for (const o of [100, 300, 500]) { g.fillStyle = '#a0703a'; g.beginPath(); g.arc(cx + a * pk, cy + o * pk, 4.5, 0, Math.PI * 2); g.fill(); }
+      dimLine(g, [cx + 100 * pk, cy + 600 * pk], [cx + (100 + pitch * 1000) * pk, cy + 600 * pk], mm(pitch), [0, 28]); dimLine(g, [cx + Lr * pk, cy], [cx + Lr * pk, cy + 600 * pk], '600 (lót)', [40, 0]); }
+    noteLines(g, rx, t + 700, PW - M - 30 - rx, ['ĐẦU CỌC & TRÌNH TỰ THI CÔNG', '1. Đào tới −1.650 (dưới dầm sườn −2.100), tiêu nước hố móng.', '2. Định vị, đóng cụm 25 cọc chân cột, rồi 3 hàng cọc dưới dầm sườn',
+      `   (bước ≈ ${mm(pitch)}), tổng ${RAFT.total} cọc; đầu cọc cắt bằng ở −2.100 / −1.650.`, '3. Rải cát đen 100 (lấp kín kẽ đầu cọc), tưới nước đầm chặt K95;', '   phần bản giữa các dầm sườn không đóng cọc, chỉ đầm cát.',
+      '4. BT lót đá 4×6 M100 dày 100.', '5. Thép dầm sườn, bản móng (KC-04D), thép chờ cột neo vào dầm ≥ 40d.', '6. Đổ BT B22.5 liền khối bản + sườn, bảo dưỡng ẩm ≥ 7 ngày.',
+      '7. Xây tường móng trên sườn, giằng −0.300, lấp đất tôn nền đầm K95.', '', 'Cọc tre chỉ bền khi luôn ngập nước; nơi mực nước ngầm thấp,', 'dao động mạnh thì không dùng phương án này.'], 16, 26);
+    pages.push(c);
+  }
+  {
+    const { c, g, top: t } = page('THÉP BẢN MÓNG BÈ & THỐNG KÊ', 'KC-04D', pages.length + 1, TOTAL, date, size);
+    heading(g, 'BỐ TRÍ THÉP BẢN MÓNG BÈ & THỐNG KÊ VẬT LIỆU', planBox.X, M + 70, 'Lớp dưới Ø12a200 hai phương, lớp trên Ø10a200 hai phương, gia cường quanh chân cột 4Ø14 L1500 · thép CB300-V');
+    const PD = (x: number, z: number) => planP(map.mx(x), map.mz(z));
+    const rr = (x0: number, z0: number, x1: number, z1: number) => { const a = PD(x0, z0), b = PD(x1, z1); return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])] as [number, number, number, number]; };
+    g.fillStyle = 'rgba(200,196,188,.35)'; for (const r of raftRects) g.fillRect(...rr(...r)); g.strokeStyle = INK; g.lineWidth = 2.5; for (const r of raftRects) g.strokeRect(...rr(...r));
+    g.globalAlpha = 0.18; drawBase(g, false); g.globalAlpha = 1;
+    // bottom bars (solid, both ways) in the south half, top bars (dashed) in the north half — every 5th bar drawn
+    const R0 = raftRects[0];
+    g.strokeStyle = '#b4532a'; g.lineWidth = 1.4;
+    for (let x = R0[0] + 0.05; x < R0[2]; x += 1.0) { g.beginPath(); g.moveTo(...PD(x, R0[1] + 0.05)); g.lineTo(...PD(x, 4.5)); g.stroke(); }
+    for (let z = R0[1] + 0.05; z < 4.5; z += 1.0) { g.beginPath(); g.moveTo(...PD(R0[0] + 0.05, z)); g.lineTo(...PD(R0[2] - 0.05, z)); g.stroke(); }
+    g.setLineDash([10, 6]); g.strokeStyle = '#1a5276';
+    for (let x = R0[0] + 0.05; x < R0[2]; x += 1.0) { g.beginPath(); g.moveTo(...PD(x, 4.5)); g.lineTo(...PD(x, R0[3] - 0.05)); g.stroke(); }
+    for (let z = 4.5; z < R0[3]; z += 1.0) { g.beginPath(); g.moveTo(...PD(R0[0] + 0.05, z)); g.lineTo(...PD(R0[2] - 0.05, z)); g.stroke(); }
+    g.setLineDash([]);
+    for (const c2 of S2.cols) { const [x, y] = planP(c2.x, c2.z), u = Math.abs(planP(c2.x + 1, c2.z)[0] - x); g.strokeStyle = '#7d3c98'; g.lineWidth = 2;
+      for (const s2 of [-1, 1]) { g.beginPath(); g.moveTo(x - 0.53 * u, y - s2 * 0.53 * u); g.lineTo(x + 0.53 * u, y + s2 * 0.53 * u); g.stroke(); }
+      const hs = 0.11 * u; g.fillStyle = '#c23b2e'; g.fillRect(x - hs, y - hs, 2 * hs, 2 * hs); }
+    { const [px, py] = PD(6.5, 2.2); g.fillStyle = '#b4532a'; g.font = `800 18px ${FONT}`; g.fillText('LỚP DƯỚI Ø12a200 (vẽ 1/5 số thanh)', px, py); const [qx, qy] = PD(6.5, 6.8); g.fillStyle = '#1a5276'; g.fillText('LỚP TRÊN Ø10a200 (vẽ 1/5 số thanh)', qx, qy); }
+    // schedules
+    const lx = planBox.X + planBox.W + 50; let ly = t + 40;
+    let barB = 0, barT = 0; for (const r of raftRects) { const wx = r[2] - r[0], wz = r[3] - r[1]; barB += (Math.floor(wz / 0.2) + 1) * (wx - 0.08) + (Math.floor(wx / 0.2) + 1) * (wz - 0.08); }
+    barT = barB; const kgB = barB * 1.05 * kgm(12), kgT = barT * 1.05 * kgm(10), kgC = S2.cols.length * 4 * 1.5 * kgm(14);
+    const kgRibL = ribs.reduce((a, b) => a + b.L * 1.05 * ((b.edge ? 6 : 7) * kgm(18) + 2 * kgm(12)), 0), kgRibS = ribs.reduce((a, b) => a + (b.L / 0.15 + 1) * 1.9 * kgm(8), 0);
+    heading(g, 'THỐNG KÊ THÉP SƠ BỘ', lx, ly);
+    ly = table(g, lx, ly + 24, [{ t: 'Cấu kiện', w: 300 }, { t: 'Thép', w: 160 }, { t: 'kG', w: 120, right: true }], [
+      ['Bản móng lớp dưới', 'Ø12a200 2 phương', kgB.toFixed(0)], ['Bản móng lớp trên', 'Ø10a200 2 phương', kgT.toFixed(0)], ['Gia cường chân cột', '4Ø14 L1500 / cột', kgC.toFixed(0)],
+      ['Dầm sườn thép dọc', 'Ø18 + Ø12 giá', kgRibL.toFixed(0)], ['Dầm sườn thép đai', 'Ø8a150', kgRibS.toFixed(0)], ['TỔNG (+5 % nối)', '', (kgB + kgT + kgC + kgRibL + kgRibS).toFixed(0)]], 30, 14) + 24;
+    heading(g, 'CỌC TRE THEO DẦM SƯỜN', lx, ly);
+    const rows = ribs.map(b => [b.id, b.edge ? 'biên' : 'giữa', fmtM(b.L), String(pilesByRib.get(b.id) ?? 0)]);
+    const h2 = Math.ceil(rows.length / 2), cols4 = [{ t: 'Dầm', w: 70 }, { t: 'Loại', w: 64 }, { t: 'Dài m', w: 70, right: true }, { t: 'Cọc', w: 80, right: true }];
+    table(g, lx, ly + 24, cols4, rows.slice(0, h2), 25, 13); ly = table(g, lx + 300, ly + 24, cols4, rows.slice(h2), 25, 13) + 16;
+    ly = table(g, lx, ly, [{ t: 'Vật liệu', w: 300 }, { t: 'Khối lượng', w: 280, right: true }], [
+      ['Cọc tre Ø60–80, L 2.5 m', `${colPiles.length + ribPiles.length} cọc (cụm cột ${colPiles.length})`], ['Cát đen đệm, đầm chặt', `${(raftArea * 0.1 + ribLen * 0.6 * 0.45).toFixed(1)} m³`],
+      ['Bê tông lót M100', `${(raftArea * 0.1 + ribLen * 0.6 * 0.1).toFixed(1)} m³`], ['Bê tông bản + sườn B22.5', `${(raftArea * RAFT.slab + ribLen * RAFT.ribW * (RAFT.rib - RAFT.slab)).toFixed(1)} m³`],
+      ['Diện tích bản móng', `${raftArea.toFixed(1)} m²`]], 27, 13);
+    pages.push(c);
+  }
+
   // ---------------- KC-05 / KC-06 roof-slab pour (đổ mái): only the BTCT roof slabs and the walls under them ----------------
   // The three roofs (edited coords from the model): their tile surfaces meet at J, the 3-roof junction (main / thờ /
   // porch), and the porch / thờ faces meet along a LEVEL valley (two parallel ridges), so it needs a box gutter.
@@ -987,17 +1146,19 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   const hRT = rT.E + (rT.Z1 - rT.Z0) / 2 * tS, zRT = (rT.Z0 + rT.Z1) / 2, xRT = rM.X0 + (hRT - rM.E) / tS;   // thờ ridge into the main roof
   const hRP = rP.E + (rP.Z1 - rP.Z0) / 2 * tS, zRP = (rP.Z0 + rP.Z1) / 2, xRP = rM.X0 + (hRP - rM.E) / tS;   // porch ridge into the main roof
   const zSP = rP.Z0 + (rM.E - rP.E) / tS;                                                // porch south face reaches the main eave
-  const SLABS = [...d.roofFrame.slabs, { x0: map.mx(10.72), z0: map.mz(6.05), x1: rM.X1, z1: rM.Z1, y: 4.1 }];   // + the flat WC roof slab (téc)
+  let kcOuts: [number, number, string][] = [];
+  // + the flat WC roof slab under the tank, 120 thick (the others 100)
+  const SLABS: { x0: number; z0: number; x1: number; z1: number; y: number; th?: number }[] = [...d.roofFrame.slabs, { x0: map.mx(10.72), z0: map.mz(6.05), x1: rM.X1, z1: rM.Z1, y: rM.E, th: 0.12 }];
   const slabAreaAt = (y: number) => SLABS.filter(s => Math.abs(s.y - y) < 0.01).reduce((a, s) => a + Math.abs(s.x1 - s.x0) * Math.abs(s.z1 - s.z0), 0);
   const levels = [...new Set(SLABS.map(s => s.y))].sort((a, b) => b - a);
-  const lvCol = (y: number) => y > 4 ? 'rgba(120,128,138,.30)' : 'rgba(47,111,179,.28)';
+  const lvCol = (y: number) => y > rP.E + 0.1 ? 'rgba(120,128,138,.30)' : 'rgba(47,111,179,.28)';
   {
     const { c, g, top: t } = page('MẶT BẰNG ĐỔ SÀN MÁI BTCT', 'KC-05', pages.length + 1, TOTAL, date, size);
     heading(g, 'MẶT BẰNG ĐỔ SÀN MÁI BTCT (CHỈ SÀN BÊ TÔNG + TƯỜNG DƯỚI)', planBox.X, M + 70, `Sàn mái chính + phòng thờ ${level(levels[0])}, sàn sảnh thụt xuống ${level(rP.E)} · dày 100 · nét đứt: tường, cột, dầm phía dưới sàn`);
     const P = planP;
     const rr = (x0: number, z0: number, x1: number, z1: number) => { const a = P(x0, z0), b = P(x1, z1); return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])] as [number, number, number, number]; };
     // slabs: filled by level, hatched, thick outline
-    for (const s of SLABS) { const q = rr(s.x0, s.z0, s.x1, s.z1); g.fillStyle = lvCol(s.y); g.fillRect(...q); hatch(g, ...q, 16, s.y > 4 ? 'rgba(90,96,104,.35)' : 'rgba(40,90,150,.35)'); }
+    for (const s of SLABS) { const q = rr(s.x0, s.z0, s.x1, s.z1); g.fillStyle = lvCol(s.y); g.fillRect(...q); hatch(g, ...q, 16, s.y > rP.E + 0.1 ? 'rgba(90,96,104,.35)' : 'rgba(40,90,150,.35)'); }
     for (const s of SLABS) { const q = rr(s.x0, s.z0, s.x1, s.z1); g.strokeStyle = INK; g.lineWidth = 1.2; g.strokeRect(...q); }
     // walls, columns, beams under the slab: dashed
     g.setLineDash([7, 5]); g.strokeStyle = '#3d4450'; g.lineWidth = 1.6;
@@ -1007,7 +1168,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     for (const c2 of S2.cols) { const [x, y] = P(c2.x, c2.z), hs = Math.abs(P(c2.x + 0.11, c2.z)[0] - x); g.fillStyle = '#5b6573'; g.fillRect(x - hs, y - hs, 2 * hs, 2 * hs); }
     // level tags
     const lvTag = (x: number, z: number, s: string, col: string) => { const [px, py] = P(x, z); g.font = `800 17px ${FONT}`; const tw = g.measureText(s).width + 14; g.fillStyle = '#fff'; g.fillRect(px - tw / 2, py - 15, tw, 24); g.strokeStyle = col; g.lineWidth = 2; g.strokeRect(px - tw / 2, py - 15, tw, 24); g.fillStyle = col; g.textAlign = 'center'; g.fillText(s, px, py + 3); g.textAlign = 'left'; };
-    lvTag(5.5, 6.8, `SÀN MÁI CHÍNH ${level(4.1)}`, INK); lvTag(1.1, 7.2, `SÀN MÁI THỜ ${level(rT.E)}`, INK); lvTag(12.6, 7.9, `SÀN MÁI BẰNG (TÉC) ${level(4.1)}`, INK);
+    lvTag(5.5, 6.8, `SÀN MÁI CHÍNH ${level(rM.E)}`, INK); lvTag(1.1, 7.2, `SÀN MÁI THỜ ${level(rT.E)}`, INK); lvTag(12.6, 7.9, `SÀN MÁI BẰNG (TÉC) ${level(rM.E)}`, INK);
     lvTag(-0.95, 2.5, `SÀN SẢNH ${level(rP.E)}`, ACC); lvTag(-0.95, 3.0, `thụt ${mm(rM.E - rP.E)}`, ACC);
     // the step line between the porch slab and the main / thờ slabs (where the lower slab meets the wall / beam)
     g.strokeStyle = ACC; g.lineWidth = 4; g.beginPath(); g.moveTo(...P(map.mx(1.0), map.mz(0))); g.lineTo(...P(map.mx(1.0), map.mz(4.95))); g.lineTo(...P(map.mx(THO_X), map.mz(4.95))); g.stroke();
@@ -1020,7 +1181,25 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     const sx0 = Math.min(...SLABS.map(s => Math.min(s.x0, s.x1))), sx1 = Math.max(...SLABS.map(s => Math.max(s.x0, s.x1))), sz0 = Math.min(...SLABS.map(s => Math.min(s.z0, s.z1))), sz1 = Math.max(...SLABS.map(s => Math.max(s.z0, s.z1)));
     dimLine(g, P(sx0, sz0 - 0.5), P(sx1, sz0 - 0.5), mm(sx1 - sx0), [0, 0]); dimLine(g, P(rM.X0 + 0.08, sz0 - 0.9), P(rM.X1 - 0.08, sz0 - 0.9), mm(rM.X1 - rM.X0 - 0.16), [0, 0]);
     dimLine(g, P(sx1 + 0.5, sz0), P(sx1 + 0.5, sz1), mm(sz1 - sz0), [0, 0]);
-    dimLine(g, P(map.mx(14), 4.5), P(map.mx(14) + 0.6, 4.5), '600', [0, 0]); dimLine(g, P(map.mx(PORCH_COL), 2.5), P(map.mx(PORCH_COL) - PORCH_EAVE, 2.5), mm(PORCH_EAVE), [0, 0]);
+    // eave overhangs: CONCRETE 540 (+ 60 cornice = 600) from the wall faces, porch 650 (+ 60 = 710) from the column centres
+    dimLine(g, P(map.mx(14), 4.5), P(map.mx(14) + 0.54, 4.5), '540 BT', [0, 0]); dimLine(g, P(map.mx(14) + 0.54, 4.5), P(map.mx(14) + 0.6, 4.5), '60', [0, -26]);
+    dimLine(g, P(map.mx(PORCH_COL), 2.5), P(map.mx(PORCH_COL) - PORCH_EAVE + 0.06, 2.5), mm(PORCH_EAVE - 0.06) + ' BT', [0, 0]);
+    dimLine(g, P(6.0, map.mz(0)), P(6.0, map.mz(0) - 0.54), '540 BT', [0, 0]); dimLine(g, P(6.0, map.mz(9.0)), P(6.0, map.mz(9.0) + 0.54), '540 BT', [0, 0]);
+    // standard dimension chains along the slab edges (every slab edge coordinate), north side and east side
+    { const u = (v: number[]) => v.sort((a, b) => a - b).filter((x, i, a) => i === 0 || x - a[i - 1] > 0.04);
+      const xs = u(SLABS.flatMap(s => [s.x0, s.x1])), zs = u(SLABS.flatMap(s => [s.z0, s.z1]));
+      for (let i = 0; i + 1 < xs.length; i++) dimLine(g, P(xs[i], sz1 + 0.35), P(xs[i + 1], sz1 + 0.35), mm(xs[i + 1] - xs[i]), [0, 0]);
+      for (let i = 0; i + 1 < zs.length; i++) dimLine(g, P(sx0 - 0.35, zs[i]), P(sx0 - 0.35, zs[i + 1]), mm(zs[i + 1] - zs[i]), [0, 0]); }
+    // recessed outlets (ô thoát nước âm sàn): over the columns that take the valley downpipes, and the flat-roof drain
+    { const outs: [number, number, string][] = d.roofFrame.downpipes.map(([x, z], i) => { const c2 = S2.cols.reduce((b, q) => Math.hypot(q.x - x, q.z - z) < Math.hypot(b.x - x, b.z - z) ? q : b, S2.cols[0]); return [c2.x, c2.z, `Ô${i + 1}`] as [number, number, string]; });
+      outs.push([map.mx(ROOF_DRAIN.x), map.mz(ROOF_DRAIN.z), `Ô${outs.length + 1}`]);
+      for (const [x, z, id] of outs) { const [px, py] = P(x, z), r = Math.abs(P(x + 0.1, z)[0] - px);
+        g.fillStyle = '#fff'; g.strokeStyle = '#1a5276'; g.lineWidth = 2.5; g.fillRect(px - r, py - r, 2 * r, 2 * r); g.strokeRect(px - r, py - r, 2 * r, 2 * r); g.beginPath(); g.arc(px, py, r * 0.55, 0, Math.PI * 2); g.stroke();
+        const sl = SLABS.find(s => x >= Math.min(s.x0, s.x1) - 0.01 && x <= Math.max(s.x0, s.x1) + 0.01 && z >= Math.min(s.z0, s.z1) - 0.01 && z <= Math.max(s.z0, s.z1) + 0.01);
+        if (sl) { const ex = Math.abs(x - sl.x0) < Math.abs(x - sl.x1) ? sl.x0 : sl.x1, ez = Math.abs(z - sl.z0) < Math.abs(z - sl.z1) ? sl.z0 : sl.z1;
+          if (Math.abs(x - ex) > 0.03) dimLine(g, P(ex, z), P(x, z), mm(Math.abs(x - ex)), [0, 0]); if (Math.abs(z - ez) > 0.03) dimLine(g, P(x, ez), P(x, z), mm(Math.abs(z - ez)), [0, 0]); }
+        g.fillStyle = '#1a5276'; g.font = `800 17px ${FONT}`; g.fillText(id, px + r + 4, py + r + 14); }
+      kcOuts = outs; }
     // right panel
     const lx = planBox.X + planBox.W + 50, lw = PW - M - 30 - lx; let ly = t + 40;
     heading(g, 'ĐIỂM GIAO 3 MÁI', lx, ly);
@@ -1031,10 +1210,13 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       `Mái sảnh và mái thờ dốc đối nhau nên giao thành đường NẰM NGANG`, `J2–J dài ${mm(xJ - xJ2)} ở cao độ ${level(hJ)} (= phần thờ nhô ra khỏi mép mái chính,`,
       'không đổi khi hạ sảnh): làm máng hộp inox 400, tự tạo dốc 1 % về ống', 'thoát Ø90 trong cột hiên.', `J cách mép ngói mái chính ${mm(xJ - rM.X0)}, cao hơn sàn mái ${mm(hJ - rM.E)}: vừa đủ`,
       'cầu phong 40×80 + li tô 30×30 — không hạ sảnh thêm (J sẽ chạm sàn).', 'X tính từ mặt ngoài tường phòng thờ, Z từ mặt tường mặt tiền (m).'], 15, 23) + 14;
+    heading(g, 'Ô THOÁT NƯỚC ÂM SÀN (200×200, ống Ø90)', lx, ly);
+    ly = table(g, lx, ly + 24, [{ t: 'Ô', w: 60 }, { t: 'Vị trí', w: 330 }, { t: 'X', w: 90, right: true }, { t: 'Z', w: 90, right: true }],
+      kcOuts.map(([x, z, id], i) => [id, i === kcOuts.length - 1 ? 'Mái bằng téc, góc lan can' : 'Trên cột nhận ống thoát máng xối', (x - map.mx(THO_X)).toFixed(2), z.toFixed(2)]), 28, 14) + 18;
     heading(g, 'SÀN MÁI BTCT', lx, ly);
     ly = table(g, lx, ly + 24, [{ t: 'Sàn', w: 250 }, { t: 'Cao độ mặt', w: 120 }, { t: 'Diện tích m²', w: 120, right: true }, { t: 'Bê tông m³', w: 110, right: true }],
-      levels.map(y => [y > 4 ? 'Mái chính, thờ, mái bằng, mái đua' : 'Sảnh (thụt xuống)', level(y), slabAreaAt(y).toFixed(1), (slabAreaAt(y) * 0.1).toFixed(2)]), 30, 14) + 14;
-    noteLines(g, lx, ly + 8, lw, ['Sàn dày 100, BT B22.5, thép Ø8a150 2 lớp 2 phương; mái đua', 'thép mũ Ø10a150 neo vào dầm ≥ 40d. Đổ liền khối với dầm giằng.',
+      levels.map(y => [y > rP.E + 0.1 ? 'Mái chính, thờ, mái bằng (120), mái đua' : 'Sảnh (thụt xuống)', level(y), slabAreaAt(y).toFixed(1), SLABS.filter(s2 => Math.abs(s2.y - y) < 0.01).reduce((a, s2) => a + Math.abs(s2.x1 - s2.x0) * Math.abs(s2.z1 - s2.z0) * (s2.th ?? 0.1), 0).toFixed(2)]), 30, 14) + 14;
+    noteLines(g, lx, ly + 8, lw, ['Sàn dày 100 (mái bằng đặt téc 120), BT B22.5, thép Ø8a150 2 lớp; mái đua', 'thép mũ Ø10a150 neo vào dầm ≥ 40d. Đổ liền khối với dầm giằng.',
       'Đổ sàn chính + thờ cùng đợt; sàn sảnh đổ sau, chờ thép ở dầm hiên.', 'Mặt sàn đánh dốc 1 % ra mép; mái bằng dốc 1 % về phễu thu.', 'Chống thấm 2 lớp trước khi dựng khung thép, lợp ngói.'], 15, 23);
     pages.push(c);
   }
@@ -1047,7 +1229,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       if (r.k === 'sanh' && x > map.mx(1.0) && z > map.mz(0.2)) return -Infinity; if (r.k === 'tho' && x > thoCut) return -Infinity;
       return r.E + Math.max(0, Math.min(r.hl ? x - r.X0 : Infinity, z - r.Z0, r.Z1 - z, r.hr ? r.X1 - x : Infinity)) * r.t; };
     // a section along z at x = xc (looking east → west)
-    const sec = (X0: number, Y0: number, Wd: number, Hd: number, along: 'z' | 'x', at: number, a0: number, a1: number, title: string) => {
+    const secG = (g: CanvasRenderingContext2D, X0: number, Y0: number, Wd: number, Hd: number, along: 'z' | 'x', at: number, a0: number, a1: number, title: string) => {
       const k = Math.min(Wd / (a1 - a0), Hd / 7.6), U = (a: number) => X0 + (a - a0) * k, V = (y: number) => Y0 + Hd - (y + 1.0) * k;
       g.fillStyle = INK; g.font = `800 24px ${FONT}`; g.fillText(title, X0, Y0 - 16);
       g.strokeStyle = '#9a8f7c'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(U(a0), V(GROUND)); g.lineTo(U(a1), V(GROUND)); g.stroke();
@@ -1055,11 +1237,11 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       for (const w of d.walls) { const ex0 = map.mx(w[0]), ez0 = map.mz(w[1]), ex1 = map.mx(w[2]), ez1 = map.mz(w[3]);
         const cut = along === 'z' ? at >= Math.min(ex0, ex1) && at <= Math.max(ex0, ex1) : at >= Math.min(ez0, ez1) && at <= Math.max(ez0, ez1); if (!cut) continue;
         const b0 = along === 'z' ? Math.min(ez0, ez1) : Math.min(ex0, ex1), b1 = along === 'z' ? Math.max(ez0, ez1) : Math.max(ex0, ex1); if (b1 < a0 || b0 > a1) continue;
-        g.fillStyle = '#2b3038'; g.fillRect(U(Math.max(a0, b0)), V(4.0), (Math.min(a1, b1) - Math.max(a0, b0)) * k, (4.0 - GROUND) * k); }
+        g.fillStyle = '#2b3038'; g.fillRect(U(Math.max(a0, b0)), V(rM.E - 0.1), (Math.min(a1, b1) - Math.max(a0, b0)) * k, (rM.E - 0.1 - GROUND) * k); }
       // slabs cut by the line
       for (const s of SLABS) { const cut = along === 'z' ? at >= Math.min(s.x0, s.x1) && at <= Math.max(s.x0, s.x1) : at >= Math.min(s.z0, s.z1) && at <= Math.max(s.z0, s.z1); if (!cut) continue;
         const b0 = along === 'z' ? Math.min(s.z0, s.z1) : Math.min(s.x0, s.x1), b1 = along === 'z' ? Math.max(s.z0, s.z1) : Math.max(s.x0, s.x1); if (b1 < a0 || b0 > a1) continue;
-        g.fillStyle = s.y > 4 ? '#7d8590' : ACC; g.fillRect(U(Math.max(a0, b0)), V(s.y), (Math.min(a1, b1) - Math.max(a0, b0)) * k, 0.1 * k + 1); }
+        g.fillStyle = s.y > rP.E + 0.1 ? '#7d8590' : ACC; g.fillRect(U(Math.max(a0, b0)), V(s.y), (Math.min(a1, b1) - Math.max(a0, b0)) * k, (s.th ?? 0.1) * k + 1); }
       // roof surfaces: each roof thin, the built top surface thicker
       const N = 240, pt = (i: number) => a0 + (a1 - a0) * i / N, XZ = (a: number): [number, number] => along === 'z' ? [at, a] : [a, at];
       for (const [r, col] of [[rM, '#5b6573'], [rT, '#8a5a3c'], [rP, ACC]] as [typeof rM, string][]) { g.strokeStyle = col; g.lineWidth = 1.2; g.setLineDash([6, 5]); g.beginPath(); let on = false;
@@ -1067,7 +1249,12 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       g.strokeStyle = '#c0392b'; g.lineWidth = 2.4; g.beginPath(); let on = false;
       for (let i = 0; i <= N; i++) { const h = Math.max(hOf(rM, ...XZ(pt(i))), hOf(rT, ...XZ(pt(i))), hOf(rP, ...XZ(pt(i)))); if (h === -Infinity) { on = false; continue; } on ? g.lineTo(U(pt(i)), V(h)) : g.moveTo(U(pt(i)), V(h)); on = true; } g.stroke();
       for (const y of [rM.E, rP.E, 0]) lvl(g, U(a1) + 20, V(y), level(y));
+      // slab thickness on each cut slab longer than 1 m
+      for (const sl of SLABS) { const cut = along === 'z' ? at >= Math.min(sl.x0, sl.x1) && at <= Math.max(sl.x0, sl.x1) : at >= Math.min(sl.z0, sl.z1) && at <= Math.max(sl.z0, sl.z1); if (!cut) continue;
+        const b0 = Math.max(a0, along === 'z' ? Math.min(sl.z0, sl.z1) : Math.min(sl.x0, sl.x1)), b1 = Math.min(a1, along === 'z' ? Math.max(sl.z0, sl.z1) : Math.max(sl.x0, sl.x1)); if (b1 - b0 < 1) continue;
+        g.fillStyle = INK; g.font = `700 13px ${FONT}`; g.fillText(`BTCT ${mm(sl.th ?? 0.1)} · ${level(sl.y)}`, U(b0) + 6, V(sl.y) - 6); }
       return { U, V, k }; };
+    const sec = (X0: number, Y0: number, Wd: number, Hd: number, along: 'z' | 'x', at: number, a0: number, a1: number, title: string) => secG(g, X0, Y0, Wd, Hd, along, at, a0, a1, title);
     const half = (PW - 2 * M - 140) / 2;
     const s1 = sec(M + 60, t + 120, half - 120, 640, 'z', xJ, -1.3, 10.2, `MẶT CẮT A-A (qua J, X = ${(xJ - map.mx(THO_X)).toFixed(2)})`);
     { const [px, py] = [s1.U(zJ), s1.V(hJ)]; g.fillStyle = '#c0392b'; g.beginPath(); g.arc(px, py, 8, 0, Math.PI * 2); g.fill(); g.font = `800 18px ${FONT}`; g.fillText(`J ${level(hJ)}`, px + 10, py - 12); }
@@ -1081,15 +1268,118 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
         f([[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]], side); f([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], sideB); f([[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]], top); };
       type Bx = { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; top: string; side: string; sideB: string };
       const boxes: Bx[] = [];
-      for (const w of d.walls) boxes.push({ x0: Math.min(map.mx(w[0]), map.mx(w[2])), z0: Math.min(map.mz(w[1]), map.mz(w[3])), x1: Math.max(map.mx(w[0]), map.mx(w[2])), z1: Math.max(map.mz(w[1]), map.mz(w[3])), y0: 0, y1: 4.0, top: '#cfd3d8', side: '#e9e6df', sideB: '#d9d5cc' });
+      for (const w of d.walls) boxes.push({ x0: Math.min(map.mx(w[0]), map.mx(w[2])), z0: Math.min(map.mz(w[1]), map.mz(w[3])), x1: Math.max(map.mx(w[0]), map.mx(w[2])), z1: Math.max(map.mz(w[1]), map.mz(w[3])), y0: 0, y1: rM.E - 0.1, top: '#cfd3d8', side: '#e9e6df', sideB: '#d9d5cc' });
       for (const c2 of S2.cols.filter(c3 => c3.porch)) boxes.push({ x0: c2.x - 0.11, z0: c2.z - 0.11, x1: c2.x + 0.11, z1: c2.z + 0.11, y0: 0, y1: rP.E - 0.1, top: '#cfd3d8', side: '#e9e6df', sideB: '#d9d5cc' });
-      for (const sl of SLABS) boxes.push({ x0: Math.min(sl.x0, sl.x1), z0: Math.min(sl.z0, sl.z1), x1: Math.max(sl.x0, sl.x1), z1: Math.max(sl.z0, sl.z1), y0: sl.y - 0.1, y1: sl.y, top: sl.y > 4 ? '#a9b0b8' : '#8fb3d9', side: '#7d8590', sideB: '#6c737c' });
+      for (const sl of SLABS) boxes.push({ x0: Math.min(sl.x0, sl.x1), z0: Math.min(sl.z0, sl.z1), x1: Math.max(sl.x0, sl.x1), z1: Math.max(sl.z0, sl.z1), y0: sl.y - 0.1, y1: sl.y, top: sl.y > rP.E + 0.1 ? '#a9b0b8' : '#8fb3d9', side: '#7d8590', sideB: '#6c737c' });
       boxes.sort((a, b) => ((b.x1 + b.z1) - (a.x1 + a.z1)) || (a.y1 - b.y1));
       for (const b of boxes) prism(b.x0, b.z0, b.x1, b.z1, b.y0, b.y1, b.top, b.side, b.sideB);
       const [jx, jy] = I(xJ, hJ, zJ); g.fillStyle = '#c0392b'; g.beginPath(); g.arc(jx, jy, 7, 0, Math.PI * 2); g.fill(); g.font = `800 18px ${FONT}`; g.fillText('J (điểm giao 3 mái, trên mặt ngói)', jx + 10, jy - 10);
       g.fillStyle = INK; g.font = `800 24px ${FONT}`; g.fillText('TRỤC ĐO SÀN MÁI BTCT + TƯỜNG (nhìn từ phía sảnh)', M + half + 40, t + 104);
-      noteLines(g, M + half + 40, bottom - 90, half, ['Xám: sàn mái chính, thờ, mái bằng, mái đua +4.100 · xanh: sàn sảnh thụt xuống. Tường, cột tới đáy sàn.'], 16, 24); }
+      noteLines(g, M + half + 40, bottom - 90, half, [`Xám: sàn mái chính, thờ, mái bằng, mái đua ${level(rM.E)} · xanh: sàn sảnh thụt xuống. Tường, cột tới đáy sàn.`], 16, 24); }
     pages.push(c);
+    // ---------------- KC-07 more sections, slab thicknesses, eave and outlet details ----------------
+    {
+      const { c: c7, g: g7, top: t7, bottom: b7 } = page('MẶT CẮT & CHI TIẾT SÀN MÁI', 'KC-07', pages.length + 1, TOTAL, date, size);
+      heading(g7, 'MẶT CẮT SÀN MÁI, ĐỘ DÀY CÁC LỚP, CHI TIẾT MÁI ĐUA & Ô THOÁT NƯỚC ÂM', M + 60, M + 70, 'Sàn mái BTCT 100 (mái bằng téc 120) · mái đua 600 = BTCT 540 + phào 60 · mm · cao độ m');
+      const half7 = (PW - 2 * M - 140) / 2;
+      secG(g7, M + 60, t7 + 110, half7 - 120, 560, 'z', map.mx(6.0), -1.3, 10.3, 'MẶT CẮT C-C (dọc mái chính, X = 6.06)');
+      secG(g7, M + 60, t7 + 790, half7 - 120, 560, 'x', map.mz(7.3), -1.5, 15.3, 'MẶT CẮT D-D (qua phòng thờ, phòng ngủ, mái bằng WC, Z = 7.30)');
+      const g = g7, dx = M + half7 + 60;
+      // eave detail (1 : 10): wall 220, tie beam 220×300, slab 100 cantilever 600, fascia, tiles 80 beyond the slab
+      { const k = 0.62, X0 = dx + 120, Y0 = t7 + 200, X = (v: number) => X0 + v * k, Y = (v: number) => Y0 - v * k;   // v mm: x from the wall's outer face (+ outwards), y from the slab top
+        g.fillStyle = INK; g.font = `800 24px ${FONT}`; g.fillText('CHI TIẾT MÁI ĐUA (1:10)', dx, t7 + 104);
+        hatch(g, X(-220), Y(-100), 220 * k, 420 * k, 9); g.strokeStyle = INK; g.lineWidth = 1.8; g.strokeRect(X(-220), Y(-100), 220 * k, 420 * k);             // wall under the beam
+        g.fillStyle = '#e7e3db'; g.fillRect(X(-220), Y(-100), 220 * k, 200 * k); g.strokeRect(X(-220), Y(-100), 220 * k, 200 * k);                                  // tie beam 220 × 300 (incl. slab)
+        g.fillStyle = '#b9b6ae'; g.fillRect(X(-420), Y(0), 960 * k, 100 * k); g.strokeRect(X(-420), Y(0), 960 * k, 100 * k);                                         // slab 100, concrete cantilever 540
+        g.fillStyle = '#f3f1ec'; g.fillRect(X(540), Y(0), 60 * k, 150 * k); g.strokeRect(X(540), Y(0), 60 * k, 150 * k);                                              // cornice (phào đắp) 60 on the slab edge
+        g.fillRect(X(530), Y(-150), 90 * k, 40 * k); g.strokeRect(X(530), Y(-150), 90 * k, 40 * k);
+        g.strokeStyle = '#b4532a'; g.lineWidth = 2; g.beginPath(); g.moveTo(X(-400), Y(-25)); g.lineTo(X(510), Y(-25)); g.lineTo(X(510), Y(-70)); g.moveTo(X(-400), Y(-75)); g.lineTo(X(-150), Y(-75)); g.stroke();
+        g.strokeStyle = '#2f7fd8'; g.lineWidth = 2; g.beginPath(); g.moveTo(X(-420), Y(-102)); g.lineTo(X(600), Y(-102)); g.stroke();                                // waterproofing
+        g.strokeStyle = '#7a5a3e'; g.lineWidth = 6; g.beginPath(); g.moveTo(X(-420), Y(-102 - 80 - 0.57 * 420)); g.lineTo(X(600), Y(-102 - 40)); g.stroke();        // rafter on props (schematic)
+        g.strokeStyle = '#3a4a5e'; g.lineWidth = 8; g.beginPath(); g.moveTo(X(-420), Y(-102 - 80 - 30 - 0.57 * 420 - 10)); g.lineTo(X(680), Y(-102 - 80 - 10 + 0.57 * 80)); g.stroke(); // tiles, 80 past the slab
+        dimLine(g, [X(0), Y(-100)], [X(540), Y(-100)], '540 BTCT', [0, -70]); dimLine(g, [X(540), Y(-100)], [X(600), Y(-100)], '60', [0, -70]); dimLine(g, [X(600), Y(-100)], [X(680), Y(-100)], '80', [0, -70]);
+        dimLine(g, [X(0), Y(-100)], [X(600), Y(-100)], '600 (tới mặt phào)', [0, -120]);
+        dimLine(g, [X(600), Y(0)], [X(600), Y(-100)], '100', [70, 0]); dimLine(g, [X(-220), Y(100)], [X(-220), Y(-100)], '300 (dầm)', [-90, 0]); dimLine(g, [X(-220), Y(320)], [X(0), Y(320)], '220', [0, 40]);
+        g.font = `500 16px ${FONT}`;
+        callout(g, X(300), Y(-50), X(420), Y(160), 'Sàn BTCT 100, thép Ø8a150 2 lớp, mũ Ø10a150', ''); callout(g, X(570), Y(-75), X(700), Y(-260), 'Phào đắp 60 (gạch + vữa) ốp mép sàn, gờ nhỏ giọt', '');
+        callout(g, X(100), Y(-102), X(-40), Y(-330), 'Chống thấm 2 lớp, quét lên dầm 150', ''); callout(g, X(640), Y(-150), X(760), Y(-420), 'Ngói thò ra 80 so với mép bê tông', '');
+        callout(g, X(-110), Y(150), X(-480), Y(190), 'Dầm giằng DG 220×300', ''); }
+      // recessed outlet (ô thoát nước âm sàn), 1 : 5
+      { const k = 0.9, X0 = dx + 160, Y0 = t7 + 760, X = (v: number) => X0 + v * k, Y = (v: number) => Y0 - v * k;
+        g.fillStyle = INK; g.font = `800 24px ${FONT}`; g.fillText('CHI TIẾT Ô THOÁT NƯỚC ÂM SÀN (1:5)', dx, t7 + 640);
+        g.fillStyle = '#b9b6ae'; g.fillRect(X(-300), Y(0), 255 * k, 100 * k); g.fillRect(X(45), Y(0), 255 * k, 100 * k); g.strokeStyle = INK; g.lineWidth = 1.8; g.strokeRect(X(-300), Y(0), 255 * k, 100 * k); g.strokeRect(X(45), Y(0), 255 * k, 100 * k);
+        g.fillStyle = '#d9d4c8'; g.beginPath(); g.moveTo(X(-300), Y(-100)); g.lineTo(X(-100), Y(-60)); g.lineTo(X(-100), Y(-40)); g.lineTo(X(-300), Y(-40)); g.closePath(); g.fill();
+        g.beginPath(); g.moveTo(X(300), Y(-100)); g.lineTo(X(100), Y(-60)); g.lineTo(X(100), Y(-40)); g.lineTo(X(300), Y(-40)); g.closePath(); g.fill();
+        g.strokeStyle = '#2f7fd8'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(X(-300), Y(-38)); g.lineTo(X(-60), Y(-38)); g.lineTo(X(-50), Y(30)); g.moveTo(X(300), Y(-38)); g.lineTo(X(60), Y(-38)); g.lineTo(X(50), Y(30)); g.stroke();
+        g.fillStyle = '#8f969d'; g.fillRect(X(-100), Y(-60), 200 * k, 14); g.fillStyle = '#cfd5da'; g.fillRect(X(-45), Y(-20), 90 * k, 420 * k); g.strokeStyle = INK; g.lineWidth = 1.5; g.strokeRect(X(-45), Y(-20), 90 * k, 420 * k);
+        dimLine(g, [X(-45), Y(400)], [X(45), Y(400)], 'Ø90', [0, 40]); dimLine(g, [X(-100), Y(-60)], [X(100), Y(-60)], '200', [0, -60]); dimLine(g, [X(300), Y(0)], [X(300), Y(100)], '100', [50, 0]);
+        g.font = `500 16px ${FONT}`; callout(g, X(0), Y(-55), X(200), Y(-170), 'Phễu thu inox / gang 200×200, lưới chắn rác', ''); callout(g, X(-200), Y(-70), X(-330), Y(-170), 'Vữa tạo dốc 1 % về phễu', '');
+        callout(g, X(-150), Y(-38), X(-380), Y(60), 'Chống thấm 2 lớp, bẻ vào phễu 100', ''); callout(g, X(40), Y(250), X(200), Y(300), 'Ống uPVC Ø90 âm trong cột 220×220', '');
+        callout(g, X(200), Y(50), X(360), Y(130), 'Sàn BTCT 100, đặt sẵn ống chờ khi đổ', ''); }
+      // thickness table
+      { let ly = b7 - 300; g.fillStyle = INK; g.font = `800 22px ${FONT}`; g.fillText('ĐỘ DÀY CÁC LỚP MÁI', dx, ly); ly += 16;
+        table(g, dx, ly, [{ t: 'Lớp (từ trên xuống)', w: 380 }, { t: 'Mái ngói', w: 170, right: true }, { t: 'Mái bằng (téc)', w: 170, right: true }], [
+          ['Ngói / gạch lá nem', '≈ 25', '20'], ['Li tô 30×30 / vữa lót', '30', '20'], ['Cầu phong 40×80 trên cây chống / vữa tạo dốc', '80 + chống', '30–50'],
+          ['Chống thấm 2 lớp', '3', '3'], ['Sàn BTCT', '100', '120'], ['Trát trần / trần thạch cao', '15 / +3.200', '15']], 30, 15); }
+      pages.push(c7);
+    }
+    // ---------------- KC-08 roof cornice (phào mái) detail ----------------
+    {
+      const { c: c8, g, top: t8, bottom: b8 } = page('CHI TIẾT PHÀO MÁI', 'KC-08', pages.length + 1, TOTAL, date, size);
+      heading(g, 'CHI TIẾT PHÀO MÁI (PHÀO ĐẮP MÉP SÀN MÁI ĐUA)', M + 60, M + 70, 'Phào dày 60 ốp mép sàn BTCT (bê tông đua 540 + phào 60 = 600) · cao 200 · kích thước mm');
+      // profile, mm: x outward from the concrete slab edge, y from the slab top (1 : 2)
+      const k = 2.3, X0 = M + 520, Y0 = t8 + 260, X = (v: number) => X0 + v * k, Y = (v: number) => Y0 - v * k;
+      g.fillStyle = INK; g.font = `800 26px ${FONT}`; g.fillText('MẶT CẮT PHÀO (1:2)', M + 80, t8 + 110);
+      // slab end + tiles above (context)
+      g.fillStyle = '#b9b6ae'; g.fillRect(X(-260), Y(0), 260 * k, 100 * k); g.strokeStyle = INK; g.lineWidth = 2; g.strokeRect(X(-260), Y(0), 260 * k, 100 * k);
+      g.fillStyle = '#b4532a'; for (const v of [-240, -180, -120, -60]) for (const y of [-25, -75]) { g.beginPath(); g.arc(X(v), Y(y), 4, 0, Math.PI * 2); g.fill(); }
+      g.strokeStyle = '#b4532a'; g.lineWidth = 2.4; g.beginPath(); g.moveTo(X(-260), Y(-25)); g.lineTo(X(-30), Y(-25)); g.lineTo(X(-30), Y(-75)); g.lineTo(X(-260), Y(-75)); g.stroke();
+      g.strokeStyle = '#2f7fd8'; g.lineWidth = 3; g.beginPath(); g.moveTo(X(-260), Y(3)); g.lineTo(X(88), Y(3)); g.stroke();
+      g.strokeStyle = '#3a4a5e'; g.lineWidth = 12; g.beginPath(); g.moveTo(X(-260), Y(150)); g.lineTo(X(140), Y(40)); g.stroke();
+      // the cornice profile (outer line), filled
+      const ogee = (a: [number, number], b: [number, number], n = 18): [number, number][] => { const out: [number, number][] = [];
+        for (let i = 1; i <= n; i++) { const u = i / n, s2 = (1 - Math.cos(Math.PI * u)) / 2; out.push([a[0] + (b[0] - a[0]) * s2, a[1] + (b[1] - a[1]) * u]); } return out; };
+      const arc = (cx: number, cy: number, r: number, a0: number, a1: number, n = 12): [number, number][] => Array.from({ length: n }, (_, i) => { const a = a0 + (a1 - a0) * (i + 1) / n; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r] as [number, number]; });
+      const prof: [number, number][] = [[0, 10], [90, 10], [90, -15], [86, -22], ...ogee([86, -22], [62, -70]), [62, -80], ...arc(62, -90, 10, Math.PI / 2, -Math.PI / 2), [62, -145], [82, -145], [82, -170],
+        [36, -170], [36, -160], [26, -160], [26, -170], [-60, -170], [-60, -190 + 20], [-60, -100], [0, -100]];
+      g.beginPath(); prof.forEach(([x, y], i) => i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y))); g.closePath();
+      g.fillStyle = '#efe9df'; g.fill(); g.save(); g.clip(); hatch(g, X(-70), Y(20), 170 * k, 200 * k, 10, 'rgba(120,110,95,.35)'); g.restore();
+      g.strokeStyle = INK; g.lineWidth = 2.6; g.beginPath(); prof.forEach(([x, y], i) => i ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y))); g.closePath(); g.stroke();
+      // core brick + mesh + anchors
+      g.setLineDash([6, 4]); g.strokeStyle = '#7a6a55'; g.lineWidth = 1.4; g.strokeRect(X(4), Y(-108), 46 * k, 34 * k); g.strokeRect(X(4), Y(-142), 46 * k, 30 * k); g.setLineDash([]);
+      g.strokeStyle = '#1a5276'; g.lineWidth = 1.4; g.setLineDash([3, 3]); g.beginPath(); prof.slice(1, -3).forEach(([x, y], i) => { const p: [number, number] = [X(x - 8), Y(y - (y > -100 ? 6 : -6))]; i ? g.lineTo(...p) : g.moveTo(...p); }); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = '#b4532a'; g.lineWidth = 3; for (const y of [-40, -120]) { g.beginPath(); g.moveTo(X(-160), Y(y)); g.lineTo(X(40), Y(y)); g.lineTo(X(40), Y(y - 20)); g.stroke(); }
+      // dimensions
+      const ys = [10, -15, -22, -70, -80, -100, -145, -170];
+      for (let i = 0; i + 1 < ys.length; i++) dimLine(g, [X(95), Y(ys[i])], [X(95), Y(ys[i + 1])], String(Math.round(ys[i] - ys[i + 1])), [120, 0]);
+      dimLine(g, [X(95), Y(10)], [X(95), Y(-170)], '180 (+ gờ 20 ôm đáy sàn)', [210, 0]); dimLine(g, [X(0), Y(0)], [X(0), Y(-100)], '100 sàn', [-330, 0]);
+      dimLine(g, [X(-60), Y(-170)], [X(0), Y(-170)], '60', [0, 70]); dimLine(g, [X(0), Y(-170)], [X(62), Y(-170)], '62', [0, 70]); dimLine(g, [X(62), Y(-170)], [X(90), Y(-170)], '28', [0, 70]);
+      dimLine(g, [X(0), Y(10)], [X(90), Y(10)], '90', [0, -50]); dimLine(g, [X(62), Y(-145)], [X(82), Y(-145)], '20', [0, -40]);
+      g.font = `500 17px ${FONT}`;
+      callout(g, X(60), Y(5), X(220), Y(130), 'Gờ đỉnh, đỡ hàng ngói chót', '1'); callout(g, X(76), Y(-45), X(300), Y(-10), 'Cong lượn sóng (cyma)', '2');
+      callout(g, X(70), Y(-90), X(300), Y(-80), 'Chỉ tròn R10', '3'); callout(g, X(62), Y(-125), X(300), Y(-140), 'Mặt phào phẳng', '4');
+      callout(g, X(31), Y(-165), X(300), Y(-230), 'Rãnh cắt nước 10×10 (gờ nhỏ giọt)', '5'); callout(g, X(-30), Y(-120), X(-200), Y(-260), 'Râu thép Ø6a300 chờ ở mép sàn', '');
+      callout(g, X(20), Y(-95), X(-200), Y(-300), 'Lõi gạch đặc + vữa M75, lưới thép mắt cáo', ''); callout(g, X(-120), Y(3), X(-300), Y(70), 'Chống thấm, bẻ lên đỉnh phào', '');
+      callout(g, X(-100), Y(115), X(-330), Y(190), 'Ngói chót thò 80 qua mặt phào', '');
+      // elevation strip of a run with the corner
+      { const ex0 = M + 80, ey = b8 - 330, L = 1100, kk = 1.3, Yb = (v: number) => ey - v * kk;
+        g.fillStyle = INK; g.font = `800 24px ${FONT}`; g.fillText('MẶT ĐỨNG ĐOẠN PHÀO TẠI GÓC MÁI (1:5)', ex0, ey - 280);
+        for (const [y0, y1, sh] of [[10, -15, '#f5f2ec'], [-15, -70, '#e9e4da'], [-70, -80, '#f5f2ec'], [-80, -100, '#ddd6ca'], [-100, -145, '#f5f2ec'], [-145, -170, '#e2dccf'], [-170, -190, '#cfc8ba']] as [number, number, string][]) {
+          g.fillStyle = sh; g.fillRect(ex0, Yb(y0), L, (y0 - y1) * kk); g.strokeStyle = INK; g.lineWidth = 1.3; g.strokeRect(ex0, Yb(y0), L, (y0 - y1) * kk);
+          // the return round the corner, foreshortened
+          g.beginPath(); g.moveTo(ex0 + L, Yb(y0)); g.lineTo(ex0 + L + 110, Yb(y0) - 40); g.lineTo(ex0 + L + 110, Yb(y1) - 40); g.lineTo(ex0 + L, Yb(y1)); g.closePath(); g.fillStyle = sh; g.fill(); g.stroke(); }
+        g.setLineDash([8, 6]); g.strokeStyle = SOFT; g.beginPath(); g.moveTo(ex0 + L, Yb(10)); g.lineTo(ex0 + L, Yb(-190)); g.stroke(); g.setLineDash([]);
+        g.fillStyle = SOFT; g.font = `500 16px ${FONT}`; g.fillText('Góc phào cắt vát 45°, nối khít, không để mạch hở', ex0 + L - 300, Yb(-190) + 34); }
+      // the model's cornice (render) + notes
+      { const px = PW - M - 40 - 780, py = t8 + 110, img = renders.cornice, iw = 780, ih = iw * img.height / img.width;
+        g.drawImage(img, px, py, iw, ih); g.strokeStyle = LINE; g.lineWidth = 1.5; g.strokeRect(px, py, iw, ih);
+        g.fillStyle = INK; g.font = `700 20px ${FONT}`; g.fillText('Phào mái trên mô hình (góc Tây Nam mái chính)', px, py + ih + 32);
+        noteLines(g, px, py + ih + 80, iw, ['GHI CHÚ', '– Phào chạy liên tục quanh mép mái chính, mái thờ, mái sảnh; cao 200, dày 60 + gờ.',
+          '– Đắp bằng vữa XM M75 trên lõi gạch + lưới thép, hoặc dùng phào GRC / xi măng đúc sẵn', '  cùng profile, bắt vít + keo vào mép sàn.',
+          '– Gờ nhỏ giọt dưới đáy phào bắt buộc để nước không chảy vào trần mái đua.', '– Bả matit, sơn ngoại thất 2 lớp cùng màu phào tường.',
+          '– Thi công sau khi tháo cốp pha sàn mái, trước khi lợp ngói.'], 17, 27); }
+      pages.push(c8);
+    }
   }
 
   // ---------------- KT-06 schedules: doors, windows ----------------
@@ -1167,16 +1457,22 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     g.filter = 'grayscale(1) contrast(1.15)'; g.drawImage(img, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); g.filter = 'none'; g.strokeStyle = LINE; g.lineWidth = 1; g.strokeRect(x + (w - iw) / 2, y + (h - ih) / 2, iw, ih); return y + (h + ih) / 2; };
   {
     const { c, g, top: t } = page('CHI TIẾT CỬA ĐI D1', 'CT-01', pages.length + 1, TOTAL, date, size);
+    const dMain = map.doors.find(dd => dd.spec.kind === 'main')!, LW = Math.round(dMain.w * 1000), LH = Math.round(dMain.h * 1000), TH = Math.round(MAIN_TRANSOM * 1000);
+    const LWm = LW / 1000, LHm = LH / 1000, TWm = (LW + 900) / 1000, THm = (LH + TH) / 1000;
     // header
     const hx = M + 40, hw = PW - 2 * M - 80, hy = t + 4;
     g.strokeStyle = INK; g.lineWidth = 2; g.strokeRect(hx, hy, hw, 150); g.lineWidth = 1.2;
     g.beginPath(); g.moveTo(hx + 200, hy); g.lineTo(hx + 200, hy + 150); g.moveTo(hx + 200, hy + 40); g.lineTo(hx + hw, hy + 40); g.moveTo(hx + 200, hy + 76); g.lineTo(hx + hw, hy + 76); g.stroke();
     g.fillStyle = INK; g.font = `700 24px ${FONT}`; g.fillText('CỬA D1', hx + 50, hy + 84); g.font = `500 19px ${FONT}`;
-    g.fillText('KÍCH THƯỚC: 3000 (R) × 2900 (C) MM', hx + 230, hy + 28); g.fillText('THÔNG THUỶ: 2100 (R) × 2400 (C) MM', hx + 1100, hy + 28); g.fillText('SỐ LƯỢNG: 01 BỘ', hx + 230, hy + 64);
+    g.fillText(`KÍCH THƯỚC: ${mm(TWm)} (R) × ${mm(THm)} (C) MM`, hx + 230, hy + 28); g.fillText(`THÔNG THUỶ CÁNH: ${mm(LWm)} (R) × ${mm(LHm)} (C) MM — thước Lỗ Ban 52.2: Quý nhân`, hx + 1100, hy + 28); g.fillText('SỐ LƯỢNG: 01 BỘ', hx + 230, hy + 64);
     g.fillText('VẬT LIỆU:   – Cửa gỗ (óc chó)', hx + 230, hy + 104); g.fillText('– Kính an toàn 8.38 mm', hx + 352, hy + 132);
     g.fillText('CHÚ Ý:  – Hướng cửa mở theo thiết kế trên mặt bằng', hx + 1100, hy + 104); g.fillText('– Đo lại kích thước thực tế trước khi thi công', hx + 1176, hy + 132);
     // elevation, 1 mm = k px, y up from the threshold
-    const k = 0.3, X0 = M + 170, Yb = hy + 210 + 2900 * k + 40, E = (x: number, y: number): [number, number] => [X0 + x * k, Yb - y * k];
+    // drawn on the reference grid (3000 × 2900, leaves 2100 × 2400) and mapped piecewise to the real door: side lights
+    // keep 450, the leaves stretch to LW, the two big panels take the height change, the transom becomes TH
+    const FX = (x: number) => x <= 450 ? x : x <= 2550 ? 450 + (x - 450) * LW / 2100 : 450 + LW + (x - 2550);
+    const FY = (y: number) => y <= 440 ? y : y <= 1925 ? 440 + (y - 440) * (LH - 915) / 1485 : y <= 2400 ? LH - 475 + (y - 1925) : LH + (y - 2400) * TH / 500;
+    const k = 0.3, X0 = M + 170, Yb = hy + 210 + 2900 * k + 40, E = (x: number, y: number): [number, number] => [X0 + FX(x) * k, Yb - FY(y) * k];
     const R = (x0: number, y0: number, x1: number, y1: number, w = 1.6) => { const a = E(x0, y1), b = E(x1, y0); g.strokeStyle = INK; g.lineWidth = w; g.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); };
     const G = (x0: number, y0: number, x1: number, y1: number) => { const a = E(x0, y1), b = E(x1, y0); glassH(g, a[0], a[1], b[0] - a[0], b[1] - a[1]); };
     const P2 = (x0: number, y0: number, x1: number, y1: number) => { R(x0, y0, x1, y1, 1.8); R(x0 + 18, y0 + 18, x1 - 18, y1 - 18, 1); };   // raised panel (2 lines)
@@ -1193,33 +1489,33 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       for (const y of [400, 1200, 2000]) { const a = E(X(450), y + 60); g.fillStyle = INK; g.fillRect(a[0] - 3, a[1], 6, 120 * k); }
     }
     // the carved sun (half on each leaf) and the handles
-    { const [cx, cy] = E(1500, 1180); g.fillStyle = '#fff'; g.beginPath(); g.arc(cx, cy, 430 * k, 0, Math.PI * 2); g.fill();
-      g.strokeStyle = INK; for (const [r, w] of [[430, 1.8], [400, 1], [300, 1.4], [90, 1.4]] as [number, number][]) { g.lineWidth = w; g.beginPath(); g.arc(cx, cy, r * k, 0, Math.PI * 2); g.stroke(); }
-      g.lineWidth = 1; for (let i = 0; i < 36; i++) { const a = i / 36 * Math.PI * 2; g.beginPath(); g.moveTo(cx + Math.cos(a) * 90 * k, cy + Math.sin(a) * 90 * k); g.lineTo(cx + Math.cos(a) * 295 * k, cy + Math.sin(a) * 295 * k); g.stroke(); }
-      g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cy - 430 * k); g.lineTo(cx, cy + 430 * k); g.stroke();
+    { const [cx, cy] = E(1500, 1182), ks = k * Math.min(1, (LH - 915) / 1485); g.fillStyle = '#fff'; g.beginPath(); g.arc(cx, cy, 430 * ks, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = INK; for (const [r, w] of [[430, 1.8], [400, 1], [300, 1.4], [90, 1.4]] as [number, number][]) { g.lineWidth = w; g.beginPath(); g.arc(cx, cy, r * ks, 0, Math.PI * 2); g.stroke(); }
+      g.lineWidth = 1; for (let i = 0; i < 36; i++) { const a = i / 36 * Math.PI * 2; g.beginPath(); g.moveTo(cx + Math.cos(a) * 90 * ks, cy + Math.sin(a) * 90 * ks); g.lineTo(cx + Math.cos(a) * 295 * ks, cy + Math.sin(a) * 295 * ks); g.stroke(); }
+      g.lineWidth = 2; g.beginPath(); g.moveTo(cx, cy - 430 * ks); g.lineTo(cx, cy + 430 * ks); g.stroke();
       for (const s of [-1, 1]) { g.fillStyle = '#fff'; g.beginPath(); g.roundRect(cx + s * 9 - 5, cy - 50 * k * 2, 10, 200 * k, 4); g.fill(); g.stroke(); } }
     g.setLineDash([10, 7]); g.strokeStyle = SOFT; g.lineWidth = 1.2; pline(g, [E(1500, 2400), E(450, 1200), E(1500, 0)]); pline(g, [E(1500, 2400), E(2550, 1200), E(1500, 0)]); g.setLineDash([]);
     // dimensions
-    const chainX = (xs: number[], y: number, off: number) => { for (let i = 0; i + 1 < xs.length; i++) dimLine(g, E(xs[i], y), E(xs[i + 1], y), String(xs[i + 1] - xs[i]), [0, off]); };
-    const chainY = (ys: number[], x: number, off: number) => { for (let i = 0; i + 1 < ys.length; i++) dimLine(g, E(x, ys[i]), E(x, ys[i + 1]), String(ys[i + 1] - ys[i]), [off, 0]); };
+    const chainX = (xs: number[], y: number, off: number) => { for (let i = 0; i + 1 < xs.length; i++) dimLine(g, E(xs[i], y), E(xs[i + 1], y), String(Math.round(FX(xs[i + 1]) - FX(xs[i]))), [0, off]); };
+    const chainY = (ys: number[], x: number, off: number) => { for (let i = 0; i + 1 < ys.length; i++) dimLine(g, E(x, ys[i]), E(x, ys[i + 1]), String(Math.round(FY(ys[i + 1]) - FY(ys[i]))), [off, 0]); };
     chainX([0, 450, 2550, 3000], 2900, -40); chainX([0, 3000], 2900, -80);
     chainX([0, 85, 365, 450, 550, 1080, 1180, 1400, 1500, 1600, 1820, 1920, 2450, 2550, 2635, 2915, 3000], 0, 36); chainX([0, 450, 1500, 2550, 3000], 0, 76); chainX([0, 3000], 0, 116);
-    chainY([0, 80, 355, 440, 1180, 1925, 2010, 2315, 2400, 2900], 3000, 46); chainY([0, 2400, 2900], 3000, 96); chainY([0, 2900], 3000, 140);
+    chainY([0, 80, 355, 440, 1182, 1925, 2010, 2315, 2400, 2900], 3000, 46); chainY([0, 2400, 2900], 3000, 96); chainY([0, 2900], 3000, 140);
     chainY([0, 2400, 2900], 0, -50); chainY([0, 2900], 0, -94);
     secMark(g, E(1500, 2900)[0], E(1500, 2900)[1] - 140, '2', 1); secMark(g, E(-150, 1300)[0] - 80, E(-150, 1300)[1], '1', 1);
     title2(g, 'MẶT ĐỨNG CỬA ĐI D1', E(1500, 0)[0], E(1500, 0)[1] + 175);
     // plan section (1-1) under it
-    { const yS = E(0, 0)[1] + 250, kd = 0.45, Pp = (x: number, d: number): [number, number] => [X0 + x * k, yS + d * kd];
+    { const yS = E(0, 0)[1] + 250, kd = 0.45, Pp = (x: number, d: number): [number, number] => [X0 + FX(x) * k, yS + d * kd];
       for (const [a, b] of [[-260, 0], [3000, 3260]]) { const p = Pp(a, -60), q = Pp(b, 160); hatch(g, p[0], p[1], q[0] - p[0], q[1] - p[1], 8); g.strokeStyle = INK; g.lineWidth = 1.8; g.strokeRect(p[0], p[1], q[0] - p[0], q[1] - p[1]); }
       const box2 = (x0: number, d0: number, x1: number, d1: number, w = 1.5) => { const p = Pp(x0, d0), q = Pp(x1, d1); g.strokeStyle = INK; g.lineWidth = w; g.strokeRect(p[0], p[1], q[0] - p[0], q[1] - p[1]); };
       box2(0, 0, 80, 100, 2); box2(2920, 0, 3000, 100, 2); box2(450, 0, 530, 100, 1.8); box2(2470, 0, 2550, 100, 1.8);
       for (const [a, b] of [[80, 450], [2550, 2920]]) { g.lineWidth = 3; pline(g, [Pp(a, 50), Pp(b, 50)], false, 3); }
       for (const [a, b] of [[530, 1500], [1500, 2470]]) { box2(a, 25, b, 75); for (let x = a + 100; x < b - 100; x += 260) box2(x, 15, Math.min(b - 100, x + 200), 85, 1); }
       g.fillStyle = INK; g.font = `700 18px ${FONT}`; g.fillText('BÊN TRONG', Pp(3300, 0)[0], Pp(0, -20)[1]); g.fillText('BÊN NGOÀI', Pp(3300, 0)[0], Pp(0, 150)[1]);
-      for (const [xs, off] of [[[0, 80, 450, 2550, 2920, 3000], -40], [[0, 3000], -80]] as [number[], number][]) for (let i = 0; i + 1 < xs.length; i++) dimLine(g, Pp(xs[i], 0), Pp(xs[i + 1], 0), String(xs[i + 1] - xs[i]), [0, off]);
+      for (const [xs, off] of [[[0, 80, 450, 2550, 2920, 3000], -40], [[0, 3000], -80]] as [number[], number][]) for (let i = 0; i + 1 < xs.length; i++) dimLine(g, Pp(xs[i], 0), Pp(xs[i + 1], 0), String(Math.round(FX(xs[i + 1]) - FX(xs[i]))), [0, off]);
       title2(g, 'MẶT CẮT 1-1 (MẶT BẰNG CỬA)', Pp(1500, 0)[0], Pp(0, 160)[1] + 80); }
     // vertical section 2-2 (depth drawn 1 : 1 px per mm for legibility)
-    { const sx = X0 + 3000 * k + 300, kd = 0.9, S = (d: number, y: number): [number, number] => [sx + d * kd, Yb - y * k];
+    { const sx = X0 + 3000 * k + 300, kd = 0.9, S = (d: number, y: number): [number, number] => [sx + d * kd, Yb - FY(y) * k];
       const a = S(-60, 3150), b = S(160, 2900); hatch(g, a[0], a[1], b[0] - a[0], b[1] - a[1], 8); g.strokeStyle = INK; g.lineWidth = 1.8; g.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]);
       const bx = (d0: number, y0: number, d1: number, y1: number, w = 1.5) => { const p = S(d0, y1), q = S(d1, y0); g.strokeStyle = INK; g.lineWidth = w; g.strokeRect(p[0], p[1], q[0] - p[0], q[1] - p[1]); };
       bx(0, 2815, 100, 2900, 2); bx(0, 2400, 100, 2485, 2); g.fillStyle = INK; { const p = S(44, 2815), q = S(56, 2485); g.fillRect(p[0], p[1], q[0] - p[0], q[1] - p[1]); }
@@ -1227,7 +1523,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       g.font = `600 17px ${FONT}`; callout(g, ...S(50, 260), S(-160, 200)[0], S(0, 200)[1], 'PANO GỖ DÀY 30MM', '');
       g.font = `700 18px ${FONT}`; g.fillStyle = INK; g.fillText('BÊN NGOÀI', S(-120, 0)[0] - 40, S(0, -200)[1]); g.fillText('BÊN TRONG', S(140, 0)[0], S(0, -200)[1]);
       for (const [ys, off] of [[[0, 80, 355, 440, 1180, 1925, 2010, 2315, 2400, 2485, 2815, 2900], 70], [[0, 2400, 2900], 120], [[0, 2900], 165]] as [number[], number][])
-        for (let i = 0; i + 1 < ys.length; i++) dimLine(g, S(100, ys[i]), S(100, ys[i + 1]), String(ys[i + 1] - ys[i]), [off, 0]);
+        for (let i = 0; i + 1 < ys.length; i++) dimLine(g, S(100, ys[i]), S(100, ys[i + 1]), String(Math.round(FY(ys[i + 1]) - FY(ys[i]))), [off, 0]);
       title2(g, 'MẶT CẮT 2-2', S(50, 0)[0], S(0, 0)[1] + 175); }
     // perspective from the model (grayscale)
     { const px = PW - M - 40 - 640, py = hy + 220; const yb2 = gray(g, renders.doorD1, px, py, 640, 900); title2(g, 'PHỐI CẢNH CỬA ĐI D1', px + 320, yb2 + 50); }
@@ -1697,7 +1993,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     ly += 20; const img = renders.pipes3d, iw = lw, ih = iw * img.height / img.width; g.drawImage(img, lx, ly, iw, ih); g.strokeStyle = LINE; g.lineWidth = 1.5; g.strokeRect(lx, ly, iw, ih); ly += ih + 30;
     heading(g, 'GHI CHÚ', lx, ly); g.fillStyle = SOFT; g.font = `400 16px ${FONT}`; ly += 6;
     ['Nước nóng: mở V1 đóng V2 dùng năng lượng mặt trời; trời âm u mở V2 đóng V1 dùng bình điện.', 'Nước nóng cấp cho 2 sen, lavabo và chậu rửa bát; ống nóng bọc cách nhiệt.',
-      'Téc trên chân cao 1.55 m (đáy +5.45), cao hơn bình NLMT để cấp tự chảy; áp sen ~3.5 m cột nước, yếu thì lắp bơm tăng áp.',
+      `Téc trên chân cao 1.55 m (đáy ${level(TANK.bottom)}), cao hơn bình NLMT để cấp tự chảy; áp sen ~3.3 m cột nước, yếu thì lắp bơm tăng áp.`,
       'Vòi tưới cây ở tường hồi Tây, ngoài WC2, cao 0.6 m.', 'Ống thoát dưới nền dốc ≥ 2 %; xí vào bể phốt (ra HG1); thoát sàn WC, lavabo qua HG3 thẳng ra mương; bếp qua HG2 ra mương. Chi tiết WC: KT-10B (WC1), KT-10C (WC2, khu giặt).',
       'Vị trí ống sơ bộ — đội thi công cần đo lại tại hiện trường.'].forEach(l2 => { ly += 25; g.fillText('• ' + l2, lx, ly, lw); });
     pages.push(c);

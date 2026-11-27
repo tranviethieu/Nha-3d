@@ -2,7 +2,7 @@
 // dimension lines per room, overall 14 x 9 m and window widths. Drawn flat on the floor, on top of
 // everything (depthTest off) so it reads like an annotated plan.
 import * as THREE from 'three';
-import { ROOM_DIMS, PlanMap, THO_X, fmtM } from './layout';
+import { ROOM_DIMS, PlanMap, THO_X, GROUND, WALL_H, PORCH_DROP, PORCH_COL, PORCH_NZ, fmtM } from './layout';
 
 export { ROOM_DIMS, type RoomDim } from './layout';
 
@@ -44,6 +44,19 @@ function textCard(lines: Line[], widthM: number) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(widthM, widthM * c.height / c.width), flatMat(tex));
   m.renderOrder = 22;
   return m;
+}
+
+/** Vertical dimension (owner's request: heights with the ruler): a post with end ticks from y0 to y1 at plan (x, z) and
+ *  the measurement on a card that always faces the camera (a sprite). */
+function vDimension(x: number, z: number, y0: number, y1: number, lines: Line[], cardW = 0.75) {
+  const g = new THREE.Group(), X = x - 7, Z = z - 4.5;
+  const bar = (w: number, h: number, d: number, px: number, py: number, pz: number) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), flatMat(undefined, ACCENT)); m.position.set(px, py, pz); m.renderOrder = 21; g.add(m); };
+  bar(0.03, y1 - y0, 0.03, X, (y0 + y1) / 2, Z);
+  for (const y of [y0, y1]) { bar(0.22, 0.025, 0.025, X, y, Z); bar(0.025, 0.025, 0.22, X, y, Z); }
+  const card = textCard(lines, cardW), mat = card.material as THREE.MeshBasicMaterial, geo = card.geometry as THREE.PlaneGeometry;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: mat.map, transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+  sp.scale.set(geo.parameters.width, geo.parameters.height, 1); sp.position.set(X + 0.05, (y0 + y1) / 2, Z); sp.center.set(-0.05, 0.5); sp.renderOrder = 23; g.add(sp);
+  return g;
 }
 
 /** Flat strip between two plan points (a thick line). */
@@ -102,6 +115,9 @@ export function buildDimensions(scene: THREE.Scene, map: PlanMap = new PlanMap()
     card.position.set((x0 + x1) / 2 - 7 + (vertical ? 0.06 : 0), Y_IN + 0.004, (z0 + z1) / 2 - 4.5 + (vertical ? 0 : 0.08));
     cards.push({ mesh: card, axis: vertical ? 'x' : 'any' });
     rg.add(card);
+    // ceiling height in the room's far corner (WC: concrete slab +2.4; living room: band +3.2, raised centre +3.35)
+    if (r.room !== 'Sảnh') { const wc = r.room === 'WC1' || r.room === 'WC2', h = wc ? 2.4 : 3.2;
+      rg.add(vDimension(x1 - 0.22, z1 - 0.22, 0, h, [{ text: `Cao trần ${fmtM(h)} m`, px: 40, weight: 700 }, ...(r.room === 'Phòng khách' ? [{ text: 'ô giữa 3.35 m', px: 32 }] : wc ? [{ text: 'trần bê tông', px: 32 }] : [{ text: 'trần thạch cao', px: 32 }])], 1.05)); }
     rooms.set(r.room, rg);
     group.add(rg);
   }
@@ -118,6 +134,14 @@ export function buildDimensions(scene: THREE.Scene, map: PlanMap = new PlanMap()
     if (r[2] - r[0] > r[3] - r[1]) { const z = r[1] < 4.5 ? -0.45 : HD + 0.45; exterior.add(dimension(map.mx(r[0]), z, map.mx(r[2]), z, t, Y_OUT, 0.45)); }
     else { const x = r[0] < 7 ? -0.45 : HW + 0.45; exterior.add(dimension(x, map.mz(r[1]), x, map.mz(r[3]), t, Y_OUT, 0.45)); }
   }
+  // heights (owner's request): yard → floor → top of the walls → ridge at the front-west corner, the total beside it,
+  // and the porch eave at the porch
+  { const rise = map.roofs.main.rise, xc = HW + 1.7, zc = -0.9;
+    exterior.add(vDimension(xc, zc, GROUND, 0, [{ text: `Nền cao ${fmtM(-GROUND)} m`, px: 38, weight: 700 }, { text: 'so với sân', px: 30 }], 1.2));
+    exterior.add(vDimension(xc, zc, 0, WALL_H, [{ text: `Tường cao ${fmtM(WALL_H)} m`, px: 40, weight: 700 }, { text: `±0.000 → +${WALL_H.toFixed(3)}`, px: 30 }], 1.45));
+    exterior.add(vDimension(xc, zc, WALL_H, WALL_H + rise, [{ text: `Mái cao ${fmtM(rise)} m`, px: 40, weight: 700 }, { text: `đỉnh mái +${(WALL_H + rise).toFixed(3)}`, px: 30 }], 1.45));
+    exterior.add(vDimension(xc + 1.1, zc, 0, WALL_H + rise, [{ text: `Tổng cao ${fmtM(WALL_H + rise)} m`, px: 42, weight: 800 }, { text: `từ nền (từ sân ${fmtM(WALL_H + rise - GROUND)} m)`, px: 30 }], 1.8));
+    exterior.add(vDimension(map.mx(PORCH_COL) - 0.9, (0.11 + PORCH_NZ) / 2, 0, WALL_H - PORCH_DROP, [{ text: `Mép mái sảnh ${fmtM(WALL_H - PORCH_DROP)} m`, px: 38, weight: 700 }, { text: `thấp hơn mái chính ${Math.round(PORCH_DROP * 1000)}`, px: 30 }], 1.6)); }
   const note = textCard([{ text: `${fmtM(map.houseW)} m × ${fmtM(map.houseD)} m phủ bì · lối đi 1.5 m · tường rào cao 1.8 m`, px: 40, weight: 600 }], 4.6);
   layFlat(note, ALONG_X.right, ALONG_X.up);
   cards.push({ mesh: note, axis: 'z' });
@@ -127,7 +151,7 @@ export function buildDimensions(scene: THREE.Scene, map: PlanMap = new PlanMap()
 
   if (mirrorZ !== null) {
     const site = new Set<THREE.Object3D>(); pathDim.traverse(o => site.add(o));
-    group.traverse(o => { if ((o as THREE.Mesh).isMesh && !site.has(o)) o.position.z = mirrorZ - o.position.z; });
+    group.traverse(o => { if (((o as THREE.Mesh).isMesh || (o as THREE.Sprite).isSprite) && !site.has(o)) o.position.z = mirrorZ - o.position.z; });
   }
   scene.add(group);
   return { group, rooms, exterior };

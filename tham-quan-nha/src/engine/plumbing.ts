@@ -1,3 +1,4 @@
+import { WALL_H } from './layout';
 // Water supply and drainage (cấp thoát nước), in DEFAULT plan coords + height y (mapped with mx / mz like the
 // electrical layout). house.ts builds the pipes in 3D (shown with the "Ống nước" button, house ghosted) and
 // exportPdf.ts draws them on the plumbing sheets (KT-10 whole house, KT-10B WC block + floor-drain detail).
@@ -17,14 +18,14 @@ export interface Pipe { kind: PipeKind; d: number; pts: [number, number, number]
 /** below-ground run of the clean-water drains (yard −0.76, 350 cover) */
 const GR = -1.11;
 const LOFT = 2.62, H1 = 2.78, H2 = 2.95, VOID = 3.45, VOIDH = 3.37, FL = -0.3;
-/** Roof equipment heights (flat roof +4.1; kept at the levels they had, owner's choice): tank bottom, solar-heater tank axis. */
-export const TANK = { x0: 11.43, x1: 13.19, z: 8.2, bottom: 5.45, label: 'Téc inox 1500 L (chân cao 1.55 m)' };
-export const SOLAR = { x0: 11.36, x1: 13.26, z0: 6.4, z1: 7.55, tankZ: 7.3, tankY: 5.1, label: 'Bình năng lượng mặt trời ~180 L (hướng Nam)' };
+/** Roof equipment heights, from the flat roof at WALL_H: tank on its 1.55 m stand (bottom WALL_H + 1.35), solar-heater tank axis. */
+export const TANK = { x0: 11.43, x1: 13.19, z: 8.2, bottom: WALL_H + 1.35, label: 'Téc inox 1500 L (chân cao 1.55 m)' };
+export const SOLAR = { x0: 11.36, x1: 13.26, z0: 6.4, z1: 7.55, tankZ: 7.3, tankY: WALL_H + 1.0, label: 'Bình năng lượng mặt trời ~180 L (hướng Nam)' };
 
 export const PIPES: Pipe[] = [
   // ---- cold supply (PPR PN10) ----
   { kind: 'cold', d: 32, note: 'ống đứng từ téc', pts: [[12.91, TANK.bottom, TANK.z], [12.91, LOFT, TANK.z], [12.91, LOFT, 7.55]] },
-  { kind: 'cold', d: 25, note: 'cấp lạnh vào bình NLMT', pts: [[11.55, TANK.bottom, TANK.z], [11.55, 4.75, TANK.z], [11.55, 4.75, SOLAR.tankZ], [11.55, 4.87, SOLAR.tankZ]] },
+  { kind: 'cold', d: 25, note: 'cấp lạnh vào bình NLMT', pts: [[11.55, TANK.bottom, TANK.z], [11.55, WALL_H + 0.65, TANK.z], [11.55, WALL_H + 0.65, SOLAR.tankZ], [11.55, WALL_H + 0.77, SOLAR.tankZ]] },
   { kind: 'cold', d: 25, note: 'trục chính trên sàn gác WC', pts: [[12.91, LOFT, 7.55], [12.91, LOFT, 6.4], [10.9, LOFT, 6.4]] },
   { kind: 'cold', d: 25, note: 'trục đi trần ra bếp', pts: [[11.0, LOFT, 6.4], [11.0, VOID, 6.4], [11.0, VOID, 4.5], [9.85, VOID, 4.5], [9.85, VOID, 1.62], [9.92, VOID, 1.62], [9.92, 0.55, 1.62]] },
   { kind: 'cold', d: 20, note: 'bồn cầu WC1', pts: [[10.9, LOFT, 6.4], [10.9, LOFT, 7.32], [10.9, 0.25, 7.32]] },
@@ -40,7 +41,7 @@ export const PIPES: Pipe[] = [
   { kind: 'cold', d: 20, note: 'bình nóng lạnh WC2', pts: [[13.72, LOFT, 6.4], [13.72, LOFT, 7.25], [13.72, 1.65, 7.25]] },
   { kind: 'cold', d: 20, note: 'vòi tưới cây (tường hồi tây, ngoài WC2)', pts: [[13.72, LOFT, 7.25], [13.72, LOFT, 8.3], [13.72, 0.6, 8.3], [14.06, 0.6, 8.3]] },
   // ---- hot water (PPR PN20, insulated): two sources, one valve each, one manifold behind the loft hatch ----
-  { kind: 'hot', d: 25, note: 'nóng từ bình NLMT (qua van V1)', pts: [[13.15, 4.87, SOLAR.tankZ], [13.15, H1, SOLAR.tankZ], [13.15, H1, 6.6], [11.9, H1, 6.6]] },
+  { kind: 'hot', d: 25, note: 'nóng từ bình NLMT (qua van V1)', pts: [[13.15, WALL_H + 0.77, SOLAR.tankZ], [13.15, H1, SOLAR.tankZ], [13.15, H1, 6.6], [11.9, H1, 6.6]] },
   { kind: 'hot', d: 25, note: 'nóng từ bình điện WC2 (qua van V2)', pts: [[13.72, 1.65, 7.57], [13.72, H1, 7.57], [13.72, H1, 6.75], [11.9, H1, 6.75], [11.9, H1, 6.6]] },
   { kind: 'hot', d: 25, note: 'cụm chia nóng', pts: [[11.9, H1, 6.6], [11.9, H2, 6.6]] },
   { kind: 'hot', d: 20, note: 'nóng → sen WC2', pts: [[11.9, H2, 6.6], [12.66, H2, 6.6], [12.66, H2, 6.83], [12.66, 1.0, 6.83]] },
@@ -64,14 +65,14 @@ export const PIPES: Pipe[] = [
   { kind: 'waste', d: 60, note: 'máy giặt', pts: [[13.6, 0.6, 5.46], [13.6, FL + 0.06, 5.46], [13.6, FL + 0.06, 5.95]] },
   { kind: 'waste', d: 60, note: 'chậu rửa bếp → hố ga HG2 → mương', pts: [[9.65, 0.55, 1.62], [9.65, FL, 1.62], [9.65, FL - 0.04, -0.7], [9.65, FL - 0.1, -2.3]] },
   // ---- vent stack: under the floor to the technical shaft in WC2's back corner, then straight up past the roof ----
-  { kind: 'vent', d: 60, note: 'thông hơi, ống đứng trong hộp kỹ thuật', pts: [[11.26, FL - 0.03, 8.66], [13.655, FL - 0.03, 8.66], [13.655, 4.55, 8.66]] },
+  { kind: 'vent', d: 60, note: 'thông hơi, ống đứng trong hộp kỹ thuật', pts: [[11.26, FL - 0.03, 8.66], [13.655, FL - 0.03, 8.66], [13.655, WALL_H + 0.6, 8.66]] },
   // ---- clean water (owner's choice): AC condensate in the walls, the flat roof + tank overflow down a column, each to
   // a pit; the roof valley gutters' downpipes (in the columns) are built from the roof in house.ts ----
   { kind: 'rain', d: 21, note: 'nước ngưng điều hoà PN1 (âm tường hậu)', pts: [[6.33, 2.72, 8.8], [6.33, 2.68, 8.9], [6.33, GR, 8.9], [6.33, GR, 9.55]] },
   { kind: 'rain', d: 21, note: 'nước ngưng điều hoà PN2 (âm tường hậu → HG1)', pts: [[10.65, 2.72, 8.8], [10.65, 2.68, 8.9], [10.65, GR, 8.9], [10.65, GR, 9.75], [10.77, GR, 9.75]] },
   { kind: 'rain', d: 21, note: 'nước ngưng điều hoà PN3 (âm tường hồi tây)', pts: [[13.8, 2.72, 2.32], [13.9, 2.68, 2.32], [13.9, GR, 2.32], [14.55, GR, 2.32]] },
-  { kind: 'rain', d: 34, note: 'ống tràn + xả cặn téc → phễu thu mái bằng', pts: [[13.19, TANK.bottom + 0.08, TANK.z], [13.4, TANK.bottom + 0.08, TANK.z], [13.4, 4.16, TANK.z], [13.4, 4.16, 9.35], [14.3, 4.16, 9.35]] },
-  { kind: 'rain', d: 90, note: 'thoát mái bằng: phễu thu → trong sàn → ống đứng trong cột (13.9, 8.9)', pts: [[14.35, 4.1, 9.35], [14.35, 4.04, 9.35], [13.9, 4.04, 8.9], [13.9, GR, 8.9], [13.75, GR, 9.6]] },
+  { kind: 'rain', d: 34, note: 'ống tràn + xả cặn téc → phễu thu mái bằng', pts: [[13.19, TANK.bottom + 0.08, TANK.z], [13.4, TANK.bottom + 0.08, TANK.z], [13.4, WALL_H + 0.06, TANK.z], [13.4, WALL_H + 0.06, 9.35], [14.3, WALL_H + 0.06, 9.35]] },
+  { kind: 'rain', d: 90, note: 'thoát mái bằng: phễu thu → trong sàn → ống đứng trong cột (13.9, 8.9)', pts: [[14.35, WALL_H, 9.35], [14.35, WALL_H - 0.06, 9.35], [13.9, WALL_H - 0.06, 8.9], [13.9, GR, 8.9], [13.75, GR, 9.6]] },
 ];
 /** Flat roof drain (phễu thu mái bằng, the roof screeded 1 % to it) in the parapet corner. */
 export const ROOF_DRAIN = { x: 14.35, z: 9.35, label: 'Phễu thu mái bằng Ø90' };

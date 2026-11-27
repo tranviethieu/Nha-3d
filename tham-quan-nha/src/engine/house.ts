@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { BED_LIGHTS, ELEC, OUT_EAVE, OUT_PORCH, OUT_WASH, bedLamp } from './electrical';
 import { PIPES, PIPE_STYLE, ROOF_DRAIN, RAIN_PITS, SHAFT, FLOOR_DRAINS, SEPTIC, MANHOLES, VALVES, TAPS, TANK, SOLAR } from './plumbing';
-import { LIGHT_SPACING, MAIN_SIDE, MAIN_TRANSOM, PlanMap, ROOM_DIMS, THO_SCREEN, THO_X, GROUND, PORCH_OUT, PORCH_NZ, PORCH_COL, PORCH_FLOOR, PORCH_EAVE, RISERS, RISE, emptyLayout, type Layout } from './layout';
+import { LIGHT_SPACING, MAIN_SIDE, MAIN_TRANSOM, PlanMap, ROOM_DIMS, THO_SCREEN, THO_X, GROUND, PORCH_OUT, PORCH_NZ, PORCH_COL, PORCH_FLOOR, PORCH_EAVE, RISERS, RISE, emptyLayout, type Layout, WALL_H, PORCH_DROP } from './layout';
 
 export type Dir = '+x' | '-x' | '+z' | '-z';
 /** Axis-aligned box in WORLD coordinates. */
@@ -121,10 +121,10 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   const H = 4.2; // walls run up under the roof; the eave line (wall height outside) is E1
   // eave heights: main roof, ancestor-room roof, porch roof. All equal (as in the client's reference photo) so the
   // white fascia and the mouldings run in one straight line from the front of the porch to the back.
-  // eaves, as in the owner's reference section 1-1: main roof on the 4.1 m walls / roof slab (+4.100). The
-  // ancestor-room roof joins it as an L at the same eave; only the porch roof steps down: porch +3.420
-  const E1=4.1,E2=E1,E3=3.42;
-  const PC=E3-0.5; // porch column top / underside of the porch beam (2.92: the reference column is 2.90)
+  // eaves, as in the owner's reference section 1-1: main roof on the walls / roof slab at WALL_H (+3.900,
+  // owner's choice). The ancestor-room roof joins it as an L at the same eave; only the porch roof steps down PORCH_DROP (+3.220)
+  const E1=WALL_H,E2=E1,E3=WALL_H-PORCH_DROP;   // owner's choice: walls 3.9 m (was 4.1), porch eave 3.22
+  const PC=E3-0.5; // porch column top / underside of the porch beam (2.72)
   // Roof surface height over an EDITED plan point (the highest roof covering it, as rendered: the porch roof is
   // clipped over the house, the ancestor-room roof east of where it runs under the main roof); -Infinity if none.
   const RS=map.roofs,RF=RS.main,RT=RS.tho,RP=RS.sanh;
@@ -949,7 +949,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     for(const sz of [-0.55,0.55]){box(tx-0.83+7,tz+sz-0.03+4.5,tx+0.83+7,tz+sz+0.03+4.5,TB-0.06,TB,stand,false,null,roofG);box(tx-0.83+7,tz+sz-0.02+4.5,tx+0.83+7,tz+sz+0.02+4.5,E1+0.5,E1+0.54,stand,false,null,roofG);}
     for(const sx of [-0.8,0,0.8])box(tx+sx-0.03+7,tz-0.58+4.5,tx+sx+0.03+7,tz+0.58+4.5,TB-0.06,TB,stand,false,null,roofG);
     const pipeM=M(0xe9e9e9),dp=(x:number,y0:number,y1:number,z:number)=>{const p=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,y1-y0,10),pipeM);p.position.set(x,(y0+y1)/2,z);roofG.add(p);};
-    dp(mx(12.91)-7,E1,TB,tz);dp(mx(11.55)-7,4.75,TB,tz);
+    dp(mx(12.91)-7,E1,TB,tz);dp(mx(11.55)-7,E1+0.65,TB,tz);
     // solar water heater (bình năng lượng mặt trời): horizontal inox tank on top, a row of vacuum tubes sloping down
     // towards the south, steel frame. Its tank top stays below the main tank's bottom (gravity feed).
     {const sx0=mx(SOLAR.x0)-7,sx1=mx(SOLAR.x1)-7,scx=(sx0+sx1)/2,sL=sx1-sx0,stz=mz(SOLAR.tankZ)-4.5,sty=SOLAR.tankY,sR=0.235;
@@ -1265,14 +1265,16 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   const rainOut:[number,number,number][]=[];
   const roofFrame:RoofFrame={members:[],props:[],slabs:[],area:{main:0,tho:0,sanh:0},ridge:0,hips:0,valley:0,ridgeEnds:0,hipFeet:0,valleyPts:[],downpipes:[],roofs:[],edgePts:[],t:RF.t};
   {
-    const SLAB=0.1,THO_TOP=E2;
+    const SLAB=0.1,THO_TOP=E2,FAS=0.06;   // slab thickness, the cornice (phào) on the slab edge
     const slabMat=M(0xb9b6ae),slabGhost=new THREE.MeshStandardMaterial({color:0x9fa4aa,transparent:true,opacity:0.3,depthWrite:false});
     const PCX=-0.625-PORCH_OUT; // the porch roof / slab reference line (the columns now stand further out, PORCH_COL)
     for(const [x0,z0,x1,z1,y] of [[1.0,0.2,10.72,9.0,E1],[10.72,0.2,14.0,6.05,E1],[4.0,0,14.0,0.2,E1],[THO_X,5.05,1.0,9.0,THO_TOP],
-      // eave slab (mái đua BTCT) 600 out from the outer wall faces (the WC corner has the flat roof slab)
-      [0.4,-0.6,14.6,0,E1],[14,0,14.6,6.05,E1],[THO_X-0.6,9.0,10.72,9.6,E1],[THO_X-0.6,4.35,THO_X,9.0,E1],[THO_X,4.35,0.4,4.95,E1],
-      // porch slab under its roof, 600 out from the porch beam faces (PORCH_EAVE from the column centres)
-      [PCX-PORCH_EAVE,0.11-PORCH_EAVE,1.0,4.95,E3],[PCX-PORCH_EAVE,4.95,THO_X,PORCH_NZ+PORCH_EAVE,E3]] as [number,number,number,number,number][]){
+      // eave slab (mái đua BTCT): the 600 overhang is measured to the face of the moulded cornice (phào đắp, FAS = 60
+      // thick on the slab edge), so the CONCRETE stops 540 out from the outer wall faces (owner's note); the WC corner
+      // has the flat roof slab
+      [0.4+FAS,-0.6+FAS,14.6-FAS,0,E1],[14,0,14.6-FAS,6.05,E1],[THO_X-0.6+FAS,9.0,10.72,9.6-FAS,E1],[THO_X-0.6+FAS,4.35+FAS,THO_X,9.0,E1],[THO_X,4.35+FAS,0.4+FAS,4.95,E1],
+      // porch slab under its roof: PORCH_EAVE (710) from the column centres to the cornice face, concrete 650
+      [PCX-PORCH_EAVE+FAS,0.11-PORCH_EAVE+FAS,1.0,4.95,E3],[PCX-PORCH_EAVE+FAS,4.95,THO_X,PORCH_NZ+PORCH_EAVE-FAS,E3]] as [number,number,number,number,number][]){
       box(x0,z0,x1,z1,y-SLAB,y,slabMat,false,null,roofG);
       const X0=mx(x0),Z0=mz(z0),X1=mx(x1),Z1=mz(z1);sbox(X0,Z0,X1,Z1,y-SLAB,y,slabGhost);roofFrame.slabs.push({x0:X0,z0:Z0,x1:X1,z1:Z1,y});}
     const RDEF:{k:RoofKey;r:typeof RF;E:number;hl:boolean;hr:boolean;ex:(x:number,z:number)=>boolean}[]=[

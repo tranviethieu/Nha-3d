@@ -62,12 +62,16 @@ export interface DoorSpec {
  *  side, a 500 transom; centred on the porch bay (z = 2.475, under the porch lamp). */
 export const MAIN_SIDE = 0.45;
 /** Main entrance: fixed transom (ô sáng) over the leaves; leaves 2.25 + 0.45 = 2.7 m, level with the window tops. */
-export const MAIN_TRANSOM = 0.5;
+/** Main door transom height (owner: feng-shui sizes, Lỗ Ban 52.2 cm ruler): 520, so the whole clear opening 2575 high falls in Tể tướng. */
+export const MAIN_TRANSOM = 0.52;
 /** Ancestor room (phòng thờ): no door; its wall to the living room is a wooden slatted partition (default plan
  *  coords) up to the ceiling, with an open passage [open] of height openH. Masonry only above the ceiling. */
 /** Outer face of the ancestor room's front wall (default plan x): 0.06 in front of the porch line x = 0, so the
  *  room is 2.41 m wide inside (THO_X + 0.2 .. 2.55): three 800 tiles + two 3 mm joints + ~2 mm at each wall. */
 export const THO_X = -0.06;
+/** Wall height = top of the walls / roof slab / main and thờ eaves (owner's choice: 3.9 m), and how far the porch roof
+ *  steps down below it (680: keeps the 3-roof junction 110 above the main slab, room for the steel frame). */
+export const WALL_H = 3.9, PORCH_DROP = 0.68;
 /** Yard / side-path level, as in the owner's reference section 1-1: the floor (0) stands 0.76 above it, five risers
  *  (≈ 152) at every outside door. */
 export const GROUND = -0.76;
@@ -91,15 +95,18 @@ export const PORCH_NZ = 5.06;
  *  with the porch floor), beyond the 1.0 m floor's edge, after the owner's section 1-1 (anh-mai 09.50.57). */
 export const PORCH_COL = -0.625 - PORCH_OUT;
 export const THO_SCREEN = { x0: 1.2, x1: 2.55, z0: 4.95, z1: 5.05, top: 3.2, open: [1.42, 2.22] as [number, number], openH: 2.2 };
+// Door clear sizes on the Lỗ Ban 52.2 cm ruler (owner's request, every size in the middle of a good cung): leaves 2120
+// high (Quý nhân); main leaves 2120 wide (Quý nhân), its whole opening 2890 (Nhân lộc); bedroom / kitchen doors 810
+// (Nhân lộc), side door 800 (Nhân lộc), WC doors 740 (Thiên tài)
 export const DOOR_SPECS: DoorSpec[] = [
-  { id: 'd-main', label: 'Cửa chính D1 (gỗ óc chó, 3000 × 2900)', room: 'Phòng khách', axis: 'z', at: 1.1, hinge: 2.475, len: 2.1, cd: '+z', od: '-x', kind: 'main', h: 2.4 },
-  { id: 'd-bep', label: 'Cửa bếp ra ngõ (mặt tiền)', room: 'Bếp + ăn', axis: 'x', at: 0.1, hinge: 6.16, len: 0.9, cd: '+x', od: '+z', kind: 'outer', h: 2.2 },
-  { id: 'd-hong', label: 'Cửa hông (tường Tây)', room: 'Hành lang', axis: 'z', at: 13.9, hinge: 4.1, len: 0.8, cd: '+z', od: '-x', kind: 'outer' },
-  { id: 'd-pn1', label: 'Cửa phòng ngủ 1', room: 'Phòng ngủ 1', axis: 'x', at: 5.0, hinge: 5.85, len: 0.9, cd: '-x', od: '+z', kind: 'inner', h: 2.2 },
-  { id: 'd-pn2', label: 'Cửa phòng ngủ 2', room: 'Phòng ngủ 2', axis: 'x', at: 5.0, hinge: 10.07, len: 0.9, cd: '-x', od: '+z', kind: 'inner', h: 2.2 },
-  { id: 'd-pn3', label: 'Cửa phòng ngủ 3', room: 'Phòng ngủ 3', axis: 'x', at: 4.0, hinge: 10.15, len: 0.9, cd: '+x', od: '-z', kind: 'inner', h: 2.2 },
-  { id: 'd-wc1', label: 'Cửa WC1', room: 'WC1', axis: 'x', at: 6.1, hinge: 12.24, len: 0.7, cd: '-x', od: '+z', kind: 'wc' },
-  { id: 'd-wc2', label: 'Cửa WC2', room: 'WC2', axis: 'x', at: 6.1, hinge: 13.57, len: 0.7, cd: '-x', od: '+z', kind: 'wc' },
+  { id: 'd-main', label: 'Cửa chính D1 (gỗ óc chó, 3020 × 2640, thông thủy 2120 × 2120)', room: 'Phòng khách', axis: 'z', at: 1.1, hinge: 2.475, len: 2.12, cd: '+z', od: '-x', kind: 'main', h: 2.12 },
+  { id: 'd-bep', label: 'Cửa bếp ra ngõ (mặt tiền)', room: 'Bếp + ăn', axis: 'x', at: 0.1, hinge: 6.16, len: 0.81, cd: '+x', od: '+z', kind: 'outer', h: 2.12 },
+  { id: 'd-hong', label: 'Cửa hông (tường Tây)', room: 'Hành lang', axis: 'z', at: 13.9, hinge: 4.1, len: 0.8, cd: '+z', od: '-x', kind: 'outer', h: 2.12 },
+  { id: 'd-pn1', label: 'Cửa phòng ngủ 1', room: 'Phòng ngủ 1', axis: 'x', at: 5.0, hinge: 5.85, len: 0.81, cd: '-x', od: '+z', kind: 'inner', h: 2.12 },
+  { id: 'd-pn2', label: 'Cửa phòng ngủ 2', room: 'Phòng ngủ 2', axis: 'x', at: 5.0, hinge: 10.07, len: 0.81, cd: '-x', od: '+z', kind: 'inner', h: 2.12 },
+  { id: 'd-pn3', label: 'Cửa phòng ngủ 3', room: 'Phòng ngủ 3', axis: 'x', at: 4.0, hinge: 10.15, len: 0.81, cd: '+x', od: '-z', kind: 'inner', h: 2.12 },
+  { id: 'd-wc1', label: 'Cửa WC1', room: 'WC1', axis: 'x', at: 6.1, hinge: 12.24, len: 0.74, cd: '-x', od: '+z', kind: 'wc', h: 2.12 },
+  { id: 'd-wc2', label: 'Cửa WC2', room: 'WC2', axis: 'x', at: 6.1, hinge: 13.57, len: 0.74, cd: '-x', od: '+z', kind: 'wc', h: 2.12 },
 ];
 /** A window opening [x0, z0, x1, z1, y0, y1] in default plan coords (the box spans the wall thickness). */
 export interface WinSpec { id: string; label: string; room: string; rect: [number, number, number, number, number, number]; style: 'triple' | 'quad' | 'awning' | 'double' }
