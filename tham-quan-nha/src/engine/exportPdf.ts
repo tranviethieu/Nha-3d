@@ -3,7 +3,7 @@
 // canvas (so Vietnamese text renders with the system fonts) around off-screen renders from Game.snapshot, and the
 // sheets are packed as JPEG pages into a small hand-written PDF (no PDF library needed).
 import type { Game } from './Game';
-import { COLOR_SPECS, GROUND, MAIN_SIDE, MAIN_TRANSOM, THO_SCREEN, THO_X, fmtM, type Dir } from './layout';
+import { COLOR_SPECS, GROUND, MAIN_SIDE, MAIN_TRANSOM, PORCH_COL, PORCH_EAVE, THO_SCREEN, THO_X, fmtM, type Dir } from './layout';
 import { CIRCUITS, ELEC, MAIN_BREAKER, SERVICE_IN, type ElecKind } from './electrical';
 import { FLOOR_DRAINS, MANHOLES, PIPES, PIPE_STYLE, SEPTIC, SHAFT, SOLAR, TANK, TAPS, VALVES, type PipeKind } from './plumbing';
 
@@ -107,7 +107,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
   const hz0 = Math.min(zA, zB), hz1 = Math.max(zA, zB);
   const E1 = 4.1, E3 = 3.42, ridge = E1 + F.rise, size = `${fmtM(map.houseD)} × ${fmtM(map.houseW)}`;
   const date = new Date().toLocaleDateString('vi-VN');
-  const TOTAL = 37;
+  const TOTAL = 39;
 
   // ---------------- renders ----------------
   onProgress('Đang dựng hình phối cảnh…');
@@ -225,7 +225,7 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
     heading(g, 'DANH MỤC BẢN VẼ', x, y += 10);
     table(g, x, y + 30, [{ t: 'Ký hiệu', w: 150 }, { t: 'Tên bản vẽ', w: 680 }], [
       ['KT-00', 'Trang bìa & tổng quan'], ['KT-01', 'Mặt bằng bố trí & kích thước'], ['KT-01B', 'Mặt bằng 3D (bỏ mái)'], ['KT-02', 'Mặt đứng chính (Nam) & mặt đứng sau (Bắc)'],
-      ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-04B', 'Bố trí cây chống'], ['KT-04C', 'Bố trí cầu phong'], ['KT-04D', 'Bố trí li tô'], ['KT-04E', 'Chi tiết kết cấu mái'], ['KT-04F', 'Ngói lợp & thống kê vật tư mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-05B', 'Định vị cột C, dầm D'], ['KC-01', 'Mặt bằng kết cấu móng'], ['KC-02', 'Chi tiết móng, cột, dầm'], ['KC-03', 'Trình tự thi công móng'], ['KC-04', 'Thống kê cốt thép & bê tông'], ['BP-01', 'Chi tiết bể phốt 3 ngăn'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-06B', 'Thống kê gạch ốp lát'], ['CT-01', 'Chi tiết cửa đi D1'], ['CT-02', 'Chi tiết cột hiên'], ['KT-07', 'Thống kê nội thất'], ['KT-08', 'Sơ đồ đèn (chiếu sáng)'], ['KT-08B', 'Mặt bằng ổ cắm & điều hoà'], ['KT-08C', 'Mặt bằng trần thạch cao, đèn, quạt'], ['KT-09', 'Sơ đồ nguyên lý tủ điện & phụ tải'], ['KT-09C', 'Sơ đồ đi dây cấp điện ổ cắm, công tắc'], ['KT-09B', 'Sơ đồ mạng & đường dây vào nhà'], ['KT-10', 'Cấp thoát nước & hộp kỹ thuật'], ['KT-10B', 'Chi tiết cấp thoát nước WC1'], ['KT-10C', 'Chi tiết cấp thoát nước WC2 & khu giặt'], ['KT-10D', 'Phối cảnh 3D hệ thống nước'], ['KT-11', 'Mặt cắt các phòng (1)'], ['KT-12', 'Mặt cắt các phòng (2)'], ['KT-13', 'Phối cảnh ngoại thất 3D'], ['KT-14', 'Phối cảnh nội thất 3D'],
+      ['KT-03', 'Mặt đứng bên (Đông, Tây)'], ['KT-04', 'Mặt bằng mái'], ['KT-04B', 'Bố trí cây chống'], ['KT-04C', 'Bố trí cầu phong'], ['KT-04D', 'Bố trí li tô'], ['KT-04E', 'Chi tiết kết cấu mái'], ['KT-04F', 'Ngói lợp & thống kê vật tư mái'], ['KT-05', 'Kết cấu sơ bộ'], ['KT-05B', 'Định vị cột C, dầm D'], ['KC-01', 'Mặt bằng kết cấu móng'], ['KC-02', 'Chi tiết móng, cột, dầm'], ['KC-03', 'Trình tự thi công móng'], ['KC-04', 'Thống kê cốt thép & bê tông'], ['KC-05', 'Mặt bằng đổ sàn mái BTCT'], ['KC-06', 'Mặt cắt & trục đo sàn mái, điểm giao 3 mái'], ['BP-01', 'Chi tiết bể phốt 3 ngăn'], ['KT-06', 'Thống kê cửa đi, cửa sổ & phòng'], ['KT-06B', 'Thống kê gạch ốp lát'], ['CT-01', 'Chi tiết cửa đi D1'], ['CT-02', 'Chi tiết cột hiên'], ['KT-07', 'Thống kê nội thất'], ['KT-08', 'Sơ đồ đèn (chiếu sáng)'], ['KT-08B', 'Mặt bằng ổ cắm & điều hoà'], ['KT-08C', 'Mặt bằng trần thạch cao, đèn, quạt'], ['KT-09', 'Sơ đồ nguyên lý tủ điện & phụ tải'], ['KT-09C', 'Sơ đồ đi dây cấp điện ổ cắm, công tắc'], ['KT-09B', 'Sơ đồ mạng & đường dây vào nhà'], ['KT-10', 'Cấp thoát nước & hộp kỹ thuật'], ['KT-10B', 'Chi tiết cấp thoát nước WC1'], ['KT-10C', 'Chi tiết cấp thoát nước WC2 & khu giặt'], ['KT-10D', 'Phối cảnh 3D hệ thống nước'], ['KT-11', 'Mặt cắt các phòng (1)'], ['KT-12', 'Mặt cắt các phòng (2)'], ['KT-13', 'Phối cảnh ngoại thất 3D'], ['KT-14', 'Phối cảnh nội thất 3D'],
     ], 25, 15);
     pages.push(c);
   }
@@ -975,6 +975,120 @@ export async function exportDesignPdf(game: Game, onProgress: (s: string) => voi
       g.font = `500 16px ${FONT}`; callout(g, x + 192 * kk, y + 37 * kk, x + 420 * kk, y - 60 * kk, '4Ø14', '1'); callout(g, x + 350 * kk, y + 150 * kk, x + 470 * kk, y + 150 * kk, 'Ø6a200', '2'); }
     noteLines(g, rx, t + 1080, rw, ['GHI CHÚ', '– Thành bể xây gạch đặc 75#, vữa XM 50#, dày 220 (vách ngăn 110).', '– Bê tông gạch vỡ lót đáy mác 50 dày 100.', '– Đáy, nắp BTCT B20; trát trong vữa XM 75# dày 15,',
       '  chống thấm Sika 3 lớp, đánh màu.', '– Ống thông hơi Ø60 nối lên ống đứng trong hộp kỹ thuật WC2.', `– Dung tích hữu ích ≈ ${(1.16 * 1.09 * 0.95 + 1.16 * 0.76 * 0.95).toFixed(2)} m³ (đủ 6–8 người).`, '– Đỉnh nắp dưới mặt sân 100, lấp đất / lát gạch lên trên.'], 17, 26);
+    pages.push(c);
+  }
+
+  // ---------------- KC-05 / KC-06 roof-slab pour (đổ mái): only the BTCT roof slabs and the walls under them ----------------
+  // The three roofs (edited coords from the model): their tile surfaces meet at J, the 3-roof junction (main / thờ /
+  // porch), and the porch / thờ faces meet along a LEVEL valley (two parallel ridges), so it needs a box gutter.
+  const RR = d.roofFrame.roofs, rM = RR.find(r => r.k === 'main')!, rT = RR.find(r => r.k === 'tho')!, rP = RR.find(r => r.k === 'sanh')!, tS = rM.t;
+  const zJ = (rP.E - rT.E + tS * (rP.Z1 + rT.Z0)) / (2 * tS), hJ = rT.E + (zJ - rT.Z0) * tS;
+  const xJ = rM.X0 + (hJ - rM.E) / tS, xJ2 = rT.X0 + (zJ - rT.Z0);                     // J on the main east face; J2 where the level valley starts (thờ east hip)
+  const hRT = rT.E + (rT.Z1 - rT.Z0) / 2 * tS, zRT = (rT.Z0 + rT.Z1) / 2, xRT = rM.X0 + (hRT - rM.E) / tS;   // thờ ridge into the main roof
+  const hRP = rP.E + (rP.Z1 - rP.Z0) / 2 * tS, zRP = (rP.Z0 + rP.Z1) / 2, xRP = rM.X0 + (hRP - rM.E) / tS;   // porch ridge into the main roof
+  const zSP = rP.Z0 + (rM.E - rP.E) / tS;                                                // porch south face reaches the main eave
+  const SLABS = [...d.roofFrame.slabs, { x0: map.mx(10.72), z0: map.mz(6.05), x1: rM.X1, z1: rM.Z1, y: 4.1 }];   // + the flat WC roof slab (téc)
+  const slabAreaAt = (y: number) => SLABS.filter(s => Math.abs(s.y - y) < 0.01).reduce((a, s) => a + Math.abs(s.x1 - s.x0) * Math.abs(s.z1 - s.z0), 0);
+  const levels = [...new Set(SLABS.map(s => s.y))].sort((a, b) => b - a);
+  const lvCol = (y: number) => y > 4 ? 'rgba(120,128,138,.30)' : 'rgba(47,111,179,.28)';
+  {
+    const { c, g, top: t } = page('MẶT BẰNG ĐỔ SÀN MÁI BTCT', 'KC-05', pages.length + 1, TOTAL, date, size);
+    heading(g, 'MẶT BẰNG ĐỔ SÀN MÁI BTCT (CHỈ SÀN BÊ TÔNG + TƯỜNG DƯỚI)', planBox.X, M + 70, `Sàn mái chính + phòng thờ ${level(levels[0])}, sàn sảnh thụt xuống ${level(rP.E)} · dày 100 · nét đứt: tường, cột, dầm phía dưới sàn`);
+    const P = planP;
+    const rr = (x0: number, z0: number, x1: number, z1: number) => { const a = P(x0, z0), b = P(x1, z1); return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])] as [number, number, number, number]; };
+    // slabs: filled by level, hatched, thick outline
+    for (const s of SLABS) { const q = rr(s.x0, s.z0, s.x1, s.z1); g.fillStyle = lvCol(s.y); g.fillRect(...q); hatch(g, ...q, 16, s.y > 4 ? 'rgba(90,96,104,.35)' : 'rgba(40,90,150,.35)'); }
+    for (const s of SLABS) { const q = rr(s.x0, s.z0, s.x1, s.z1); g.strokeStyle = INK; g.lineWidth = 1.2; g.strokeRect(...q); }
+    // walls, columns, beams under the slab: dashed
+    g.setLineDash([7, 5]); g.strokeStyle = '#3d4450'; g.lineWidth = 1.6;
+    for (const w of d.walls) g.strokeRect(...rr(map.mx(w[0]), map.mz(w[1]), map.mx(w[2]), map.mz(w[3])));
+    g.strokeStyle = 'rgba(184,106,44,.8)'; for (const b of S2.beams) { g.beginPath(); g.moveTo(...P(b.x0, b.z0)); g.lineTo(...P(b.x1, b.z1)); g.stroke(); }
+    g.setLineDash([]);
+    for (const c2 of S2.cols) { const [x, y] = P(c2.x, c2.z), hs = Math.abs(P(c2.x + 0.11, c2.z)[0] - x); g.fillStyle = '#5b6573'; g.fillRect(x - hs, y - hs, 2 * hs, 2 * hs); }
+    // level tags
+    const lvTag = (x: number, z: number, s: string, col: string) => { const [px, py] = P(x, z); g.font = `800 17px ${FONT}`; const tw = g.measureText(s).width + 14; g.fillStyle = '#fff'; g.fillRect(px - tw / 2, py - 15, tw, 24); g.strokeStyle = col; g.lineWidth = 2; g.strokeRect(px - tw / 2, py - 15, tw, 24); g.fillStyle = col; g.textAlign = 'center'; g.fillText(s, px, py + 3); g.textAlign = 'left'; };
+    lvTag(5.5, 6.8, `SÀN MÁI CHÍNH ${level(4.1)}`, INK); lvTag(1.1, 7.2, `SÀN MÁI THỜ ${level(rT.E)}`, INK); lvTag(12.6, 7.9, `SÀN MÁI BẰNG (TÉC) ${level(4.1)}`, INK);
+    lvTag(-0.95, 2.5, `SÀN SẢNH ${level(rP.E)}`, ACC); lvTag(-0.95, 3.0, `thụt ${mm(rM.E - rP.E)}`, ACC);
+    // the step line between the porch slab and the main / thờ slabs (where the lower slab meets the wall / beam)
+    g.strokeStyle = ACC; g.lineWidth = 4; g.beginPath(); g.moveTo(...P(map.mx(1.0), map.mz(0))); g.lineTo(...P(map.mx(1.0), map.mz(4.95))); g.lineTo(...P(map.mx(THO_X), map.mz(4.95))); g.stroke();
+    // roof-surface lines over the slab (thin, for the frame): valleys and the 3-roof junction J
+    g.strokeStyle = '#c0392b'; g.lineWidth = 2; g.setLineDash([12, 6]);
+    for (const [a, b] of [[[xJ2, zJ], [xJ, zJ]], [[xJ, zJ], [xRT, zRT]], [[xJ, zJ], [xRP, zRP]], [[xRP, zRP], [rM.X0, zSP]]] as [number, number][][]) { g.beginPath(); g.moveTo(...P(a[0], a[1])); g.lineTo(...P(b[0], b[1])); g.stroke(); }
+    g.setLineDash([]);
+    for (const [x, z, s] of [[xJ, zJ, 'J'], [xJ2, zJ, 'J2'], [xRT, zRT, 'T'], [xRP, zRP, 'S']] as [number, number, string][]) { const [px, py] = P(x, z); g.fillStyle = '#c0392b'; g.beginPath(); g.arc(px, py, 8, 0, Math.PI * 2); g.fill(); g.font = `800 18px ${FONT}`; g.fillText(s, px + 10, py - 8); }
+    // overall dimensions of the slabs
+    const sx0 = Math.min(...SLABS.map(s => Math.min(s.x0, s.x1))), sx1 = Math.max(...SLABS.map(s => Math.max(s.x0, s.x1))), sz0 = Math.min(...SLABS.map(s => Math.min(s.z0, s.z1))), sz1 = Math.max(...SLABS.map(s => Math.max(s.z0, s.z1)));
+    dimLine(g, P(sx0, sz0 - 0.5), P(sx1, sz0 - 0.5), mm(sx1 - sx0), [0, 0]); dimLine(g, P(rM.X0 + 0.08, sz0 - 0.9), P(rM.X1 - 0.08, sz0 - 0.9), mm(rM.X1 - rM.X0 - 0.16), [0, 0]);
+    dimLine(g, P(sx1 + 0.5, sz0), P(sx1 + 0.5, sz1), mm(sz1 - sz0), [0, 0]);
+    dimLine(g, P(map.mx(14), 4.5), P(map.mx(14) + 0.6, 4.5), '600', [0, 0]); dimLine(g, P(map.mx(PORCH_COL), 2.5), P(map.mx(PORCH_COL) - PORCH_EAVE, 2.5), mm(PORCH_EAVE), [0, 0]);
+    // right panel
+    const lx = planBox.X + planBox.W + 50, lw = PW - M - 30 - lx; let ly = t + 40;
+    heading(g, 'ĐIỂM GIAO 3 MÁI', lx, ly);
+    ly = table(g, lx, ly + 24, [{ t: 'Điểm', w: 60 }, { t: 'Giao giữa', w: 250 }, { t: 'X', w: 80, right: true }, { t: 'Z', w: 80, right: true }, { t: 'Cao độ', w: 100, right: true }], [
+      ['J', 'Mái chính · mái thờ · mái sảnh', (xJ - map.mx(THO_X)).toFixed(2), zJ.toFixed(2), level(hJ)], ['J2', 'Đầu máng ngang (hip mái thờ)', (xJ2 - map.mx(THO_X)).toFixed(2), zJ.toFixed(2), level(hJ)],
+      ['T', 'Nóc mái thờ chạm mái chính', (xRT - map.mx(THO_X)).toFixed(2), zRT.toFixed(2), level(hRT)], ['S', 'Nóc mái sảnh chạm mái chính', (xRP - map.mx(THO_X)).toFixed(2), zRP.toFixed(2), level(hRP)]], 30, 14) + 16;
+    ly = noteLines(g, lx, ly + 8, lw, [`Mái sảnh thấp hơn ${mm(rM.E - rP.E)}: mép ngói sảnh ${level(rP.E)}, mái chính / thờ ${level(rM.E)}.`,
+      `Mái sảnh và mái thờ dốc đối nhau nên giao thành đường NẰM NGANG`, `J2–J dài ${mm(xJ - xJ2)} ở cao độ ${level(hJ)} (= phần thờ nhô ra khỏi mép mái chính,`,
+      'không đổi khi hạ sảnh): làm máng hộp inox 400, tự tạo dốc 1 % về ống', 'thoát Ø90 trong cột hiên.', `J cách mép ngói mái chính ${mm(xJ - rM.X0)}, cao hơn sàn mái ${mm(hJ - rM.E)}: vừa đủ`,
+      'cầu phong 40×80 + li tô 30×30 — không hạ sảnh thêm (J sẽ chạm sàn).', 'X tính từ mặt ngoài tường phòng thờ, Z từ mặt tường mặt tiền (m).'], 15, 23) + 14;
+    heading(g, 'SÀN MÁI BTCT', lx, ly);
+    ly = table(g, lx, ly + 24, [{ t: 'Sàn', w: 250 }, { t: 'Cao độ mặt', w: 120 }, { t: 'Diện tích m²', w: 120, right: true }, { t: 'Bê tông m³', w: 110, right: true }],
+      levels.map(y => [y > 4 ? 'Mái chính, thờ, mái bằng, mái đua' : 'Sảnh (thụt xuống)', level(y), slabAreaAt(y).toFixed(1), (slabAreaAt(y) * 0.1).toFixed(2)]), 30, 14) + 14;
+    noteLines(g, lx, ly + 8, lw, ['Sàn dày 100, BT B22.5, thép Ø8a150 2 lớp 2 phương; mái đua', 'thép mũ Ø10a150 neo vào dầm ≥ 40d. Đổ liền khối với dầm giằng.',
+      'Đổ sàn chính + thờ cùng đợt; sàn sảnh đổ sau, chờ thép ở dầm hiên.', 'Mặt sàn đánh dốc 1 % ra mép; mái bằng dốc 1 % về phễu thu.', 'Chống thấm 2 lớp trước khi dựng khung thép, lợp ngói.'], 15, 23);
+    pages.push(c);
+  }
+  {
+    const { c, g, top: t, bottom } = page('MẶT CẮT & TRỤC ĐO SÀN MÁI', 'KC-06', pages.length + 1, TOTAL, date, size);
+    heading(g, 'MẶT CẮT QUA ĐIỂM GIAO 3 MÁI & TRỤC ĐO SÀN MÁI BTCT', M + 60, M + 70, 'Nét liền: sàn BTCT, tường; nét mảnh: mặt ngói 3 mái (để dựng khung) · cao độ m');
+    // top surface of each roof at (x, z), as in the model (porch clipped over the house, thờ clipped past where it runs under)
+    const thoCut = rM.X0 + Math.max(0, hRT + 0.12 - rM.E) / tS;
+    const hOf = (r: typeof rM, x: number, z: number) => { if (x < r.X0 || x > r.X1 || z < r.Z0 || z > r.Z1) return -Infinity;
+      if (r.k === 'sanh' && x > map.mx(1.0) && z > map.mz(0.2)) return -Infinity; if (r.k === 'tho' && x > thoCut) return -Infinity;
+      return r.E + Math.max(0, Math.min(r.hl ? x - r.X0 : Infinity, z - r.Z0, r.Z1 - z, r.hr ? r.X1 - x : Infinity)) * r.t; };
+    // a section along z at x = xc (looking east → west)
+    const sec = (X0: number, Y0: number, Wd: number, Hd: number, along: 'z' | 'x', at: number, a0: number, a1: number, title: string) => {
+      const k = Math.min(Wd / (a1 - a0), Hd / 7.6), U = (a: number) => X0 + (a - a0) * k, V = (y: number) => Y0 + Hd - (y + 1.0) * k;
+      g.fillStyle = INK; g.font = `800 24px ${FONT}`; g.fillText(title, X0, Y0 - 16);
+      g.strokeStyle = '#9a8f7c'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(U(a0), V(GROUND)); g.lineTo(U(a1), V(GROUND)); g.stroke();
+      // walls cut by the line (default coords → edited), from the floor to the slab underside
+      for (const w of d.walls) { const ex0 = map.mx(w[0]), ez0 = map.mz(w[1]), ex1 = map.mx(w[2]), ez1 = map.mz(w[3]);
+        const cut = along === 'z' ? at >= Math.min(ex0, ex1) && at <= Math.max(ex0, ex1) : at >= Math.min(ez0, ez1) && at <= Math.max(ez0, ez1); if (!cut) continue;
+        const b0 = along === 'z' ? Math.min(ez0, ez1) : Math.min(ex0, ex1), b1 = along === 'z' ? Math.max(ez0, ez1) : Math.max(ex0, ex1); if (b1 < a0 || b0 > a1) continue;
+        g.fillStyle = '#2b3038'; g.fillRect(U(Math.max(a0, b0)), V(4.0), (Math.min(a1, b1) - Math.max(a0, b0)) * k, (4.0 - GROUND) * k); }
+      // slabs cut by the line
+      for (const s of SLABS) { const cut = along === 'z' ? at >= Math.min(s.x0, s.x1) && at <= Math.max(s.x0, s.x1) : at >= Math.min(s.z0, s.z1) && at <= Math.max(s.z0, s.z1); if (!cut) continue;
+        const b0 = along === 'z' ? Math.min(s.z0, s.z1) : Math.min(s.x0, s.x1), b1 = along === 'z' ? Math.max(s.z0, s.z1) : Math.max(s.x0, s.x1); if (b1 < a0 || b0 > a1) continue;
+        g.fillStyle = s.y > 4 ? '#7d8590' : ACC; g.fillRect(U(Math.max(a0, b0)), V(s.y), (Math.min(a1, b1) - Math.max(a0, b0)) * k, 0.1 * k + 1); }
+      // roof surfaces: each roof thin, the built top surface thicker
+      const N = 240, pt = (i: number) => a0 + (a1 - a0) * i / N, XZ = (a: number): [number, number] => along === 'z' ? [at, a] : [a, at];
+      for (const [r, col] of [[rM, '#5b6573'], [rT, '#8a5a3c'], [rP, ACC]] as [typeof rM, string][]) { g.strokeStyle = col; g.lineWidth = 1.2; g.setLineDash([6, 5]); g.beginPath(); let on = false;
+        for (let i = 0; i <= N; i++) { const h = hOf(r, ...XZ(pt(i))); if (h === -Infinity) { on = false; continue; } on ? g.lineTo(U(pt(i)), V(h)) : g.moveTo(U(pt(i)), V(h)); on = true; } g.stroke(); g.setLineDash([]); }
+      g.strokeStyle = '#c0392b'; g.lineWidth = 2.4; g.beginPath(); let on = false;
+      for (let i = 0; i <= N; i++) { const h = Math.max(hOf(rM, ...XZ(pt(i))), hOf(rT, ...XZ(pt(i))), hOf(rP, ...XZ(pt(i)))); if (h === -Infinity) { on = false; continue; } on ? g.lineTo(U(pt(i)), V(h)) : g.moveTo(U(pt(i)), V(h)); on = true; } g.stroke();
+      for (const y of [rM.E, rP.E, 0]) lvl(g, U(a1) + 20, V(y), level(y));
+      return { U, V, k }; };
+    const half = (PW - 2 * M - 140) / 2;
+    const s1 = sec(M + 60, t + 120, half - 120, 640, 'z', xJ, -1.3, 10.2, `MẶT CẮT A-A (qua J, X = ${(xJ - map.mx(THO_X)).toFixed(2)})`);
+    { const [px, py] = [s1.U(zJ), s1.V(hJ)]; g.fillStyle = '#c0392b'; g.beginPath(); g.arc(px, py, 8, 0, Math.PI * 2); g.fill(); g.font = `800 18px ${FONT}`; g.fillText(`J ${level(hJ)}`, px + 10, py - 12); }
+    sec(M + 60, t + 870, half - 120, 640, 'x', map.mz(2.5), -2.6, 15.0, 'MẶT CẮT B-B (qua sảnh và phòng khách, Z = 2.50)');
+    // isometric: slabs + walls only (seen from the south-east, the porch side)
+    { const s = 44, ca = Math.cos(Math.PI / 6), sa = Math.sin(Math.PI / 6), ox = M + half + 40 + half / 2 - 2 * ca * s, oy = t + 760;
+      // seen from the south-east (porch side): nearer = smaller x + z, drawn last
+      const I = (x: number, y: number, z: number): [number, number] => [ox + (x - z) * ca * s, oy - (x + z) * sa * s - y * s];
+      const prism = (x0: number, z0: number, x1: number, z1: number, y0: number, y1: number, top: string, side: string, sideB: string) => {
+        const f = (pts: [number, number, number][], col: string) => { g.fillStyle = col; g.strokeStyle = 'rgba(30,36,48,.55)'; g.lineWidth = 0.9; g.beginPath(); pts.forEach((p, i) => { const q = I(...p); i ? g.lineTo(...q) : g.moveTo(...q); }); g.closePath(); g.fill(); g.stroke(); };
+        f([[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]], side); f([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], sideB); f([[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]], top); };
+      type Bx = { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; top: string; side: string; sideB: string };
+      const boxes: Bx[] = [];
+      for (const w of d.walls) boxes.push({ x0: Math.min(map.mx(w[0]), map.mx(w[2])), z0: Math.min(map.mz(w[1]), map.mz(w[3])), x1: Math.max(map.mx(w[0]), map.mx(w[2])), z1: Math.max(map.mz(w[1]), map.mz(w[3])), y0: 0, y1: 4.0, top: '#cfd3d8', side: '#e9e6df', sideB: '#d9d5cc' });
+      for (const c2 of S2.cols.filter(c3 => c3.porch)) boxes.push({ x0: c2.x - 0.11, z0: c2.z - 0.11, x1: c2.x + 0.11, z1: c2.z + 0.11, y0: 0, y1: rP.E - 0.1, top: '#cfd3d8', side: '#e9e6df', sideB: '#d9d5cc' });
+      for (const sl of SLABS) boxes.push({ x0: Math.min(sl.x0, sl.x1), z0: Math.min(sl.z0, sl.z1), x1: Math.max(sl.x0, sl.x1), z1: Math.max(sl.z0, sl.z1), y0: sl.y - 0.1, y1: sl.y, top: sl.y > 4 ? '#a9b0b8' : '#8fb3d9', side: '#7d8590', sideB: '#6c737c' });
+      boxes.sort((a, b) => ((b.x1 + b.z1) - (a.x1 + a.z1)) || (a.y1 - b.y1));
+      for (const b of boxes) prism(b.x0, b.z0, b.x1, b.z1, b.y0, b.y1, b.top, b.side, b.sideB);
+      const [jx, jy] = I(xJ, hJ, zJ); g.fillStyle = '#c0392b'; g.beginPath(); g.arc(jx, jy, 7, 0, Math.PI * 2); g.fill(); g.font = `800 18px ${FONT}`; g.fillText('J (điểm giao 3 mái, trên mặt ngói)', jx + 10, jy - 10);
+      g.fillStyle = INK; g.font = `800 24px ${FONT}`; g.fillText('TRỤC ĐO SÀN MÁI BTCT + TƯỜNG (nhìn từ phía sảnh)', M + half + 40, t + 104);
+      noteLines(g, M + half + 40, bottom - 90, half, ['Xám: sàn mái chính, thờ, mái bằng, mái đua +4.100 · xanh: sàn sảnh thụt xuống. Tường, cột tới đáy sàn.'], 16, 24); }
     pages.push(c);
   }
 
