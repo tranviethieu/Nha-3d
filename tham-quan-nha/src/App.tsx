@@ -112,6 +112,7 @@ export default function App() {
     { icon: 'ti-settings', label: 'Cài đặt', run: () => setSettingsOpen(o => !o) },
     { icon: 'ti-messages', label: 'Trao đổi', run: () => setChatOpen(o => !o) },
     { icon: 'ti-home', label: hud?.roofOn ? 'Ẩn mái' : 'Hiện mái', run: (x: Game) => x.toggleRoof() },
+    { icon: 'ti-bath', label: hud?.loftOn ? 'Ẩn mái kho' : 'Hiện mái kho', run: (x: Game) => x.toggleLoft() },
     { icon: hud?.lightsOn ? 'ti-bulb-off' : 'ti-bulb', label: hud?.lightsOn ? 'Tắt đèn' : 'Bật đèn', run: (x: Game) => x.toggleLights() },
     { icon: 'ti-building', label: hud?.structure ? 'Ẩn kết cấu' : 'Kết cấu', run: (x: Game) => x.toggleStructure() },
     { icon: 'ti-droplet', label: hud?.pipes ? 'Ẩn ống nước' : 'Ống nước', run: (x: Game) => x.togglePipes() },

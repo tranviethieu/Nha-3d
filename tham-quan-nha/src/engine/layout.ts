@@ -33,10 +33,10 @@ export interface Layout {
 export const COLOR_SPECS = [
   { key: 'wall', label: 'Tường', hint: 'tường trong và ngoài', def: '#f4f3ef' },
   { key: 'topBand', label: 'Phào trên', hint: 'dải dưới mái, ô ốp cửa sổ phòng thờ, sọc cột hiên', def: '#3b3f45' },
-  { key: 'bottomBand', label: 'Phào dưới', hint: 'chân tường, chân cột hiên', def: '#2f3236' },
+  { key: 'bottomBand', label: 'Phào dưới', hint: 'chân tường, chân cột hiên, bệ đá + bậc tam cấp, viền bồn cây', def: '#2f3236' },
   { key: 'roof', label: 'Mái ngói', hint: 'cả 3 mái; bờ nóc, chóp mái đậm hơn', def: '#2c3447' },
   { key: 'fascia', label: 'Viền mái', hint: 'viền và trần mái đua, trần hiên', def: '#ffffff' },
-  { key: 'column', label: 'Cột, dầm hiên', hint: 'cột và dầm sảnh', def: '#ffffff' },
+  { key: 'column', label: 'Cột, dầm hiên', hint: 'cột và dầm sảnh, mặt bệ đá, chậu cây hiên', def: '#ffffff' },
   { key: 'winFrame', label: 'Khung cửa sổ', hint: 'khung nhôm các cửa sổ', def: '#2b2d31' },
 ] as const;
 export type ColorKey = typeof COLOR_SPECS[number]['key'];
@@ -55,38 +55,49 @@ export interface DoorSpec {
   cd: Dir; od: Dir; kind: 'main' | 'outer' | 'inner' | 'wc';
   /** default leaf height (2.1 m if not given) */
   h?: number;
+  /** opens 180° (through od) to lie flat on the wall: hung on the wall face on the od side, not the centre line */
+  full?: boolean;
 }
-/** Main entrance: fixed side light width on each side of the two leaves (total 2.8 m = 1.8 leaves + 2 x 0.5). */
-export const MAIN_SIDE = 0.5;
+/** Main entrance = the owner's wooden door D1 (3000 x 2900): two 1050 leaves, a 450 fixed glazed side panel on each
+ *  side, a 500 transom; centred on the porch bay (z = 2.475, under the porch lamp). */
+export const MAIN_SIDE = 0.45;
 /** Main entrance: fixed transom (ô sáng) over the leaves; leaves 2.25 + 0.45 = 2.7 m, level with the window tops. */
-export const MAIN_TRANSOM = 0.45;
+export const MAIN_TRANSOM = 0.5;
 /** Ancestor room (phòng thờ): no door; its wall to the living room is a wooden slatted partition (default plan
  *  coords) up to the ceiling, with an open passage [open] of height openH. Masonry only above the ceiling. */
 /** Outer face of the ancestor room's front wall (default plan x): 0.06 in front of the porch line x = 0, so the
  *  room is 2.41 m wide inside (THO_X + 0.2 .. 2.55): three 800 tiles + two 3 mm joints + ~2 mm at each wall. */
 export const THO_X = -0.06;
+/** Yard / side-path level, as in the owner's reference section 1-1: the floor (0) stands 0.76 above it, five risers
+ *  (≈ 152) at every outside door. */
+export const GROUND = -0.76;
+/** Risers from the yard to the floor and their height. */
+export const RISERS = Math.round(-GROUND / 0.15), RISE = -GROUND / RISERS;
+/** The porch was made deeper after the owner's reference house: columns, beams, slab, steps, pedestals and the porch
+ *  roof all sit PORCH_OUT further out (column centre 2.28 m from the living-room wall face). */
+export const PORCH_OUT = 0.65;
 export const THO_SCREEN = { x0: 1.2, x1: 2.55, z0: 4.95, z1: 5.05, top: 3.2, open: [1.42, 2.22] as [number, number], openH: 2.2 };
 export const DOOR_SPECS: DoorSpec[] = [
-  { id: 'd-main', label: 'Cửa chính (đôi, nhôm kính)', room: 'Phòng khách', axis: 'z', at: 1.1, hinge: 2.575, len: 1.8, cd: '+z', od: '-x', kind: 'main', h: 2.25 },
+  { id: 'd-main', label: 'Cửa chính D1 (gỗ óc chó, 3000 × 2900)', room: 'Phòng khách', axis: 'z', at: 1.1, hinge: 2.475, len: 2.1, cd: '+z', od: '-x', kind: 'main', h: 2.4 },
+  { id: 'd-bep', label: 'Cửa bếp ra ngõ (mặt tiền)', room: 'Bếp + ăn', axis: 'x', at: 0.1, hinge: 6.16, len: 0.9, cd: '+x', od: '+z', kind: 'outer', h: 2.2 },
   { id: 'd-hong', label: 'Cửa hông (tường Tây)', room: 'Hành lang', axis: 'z', at: 13.9, hinge: 4.1, len: 0.8, cd: '+z', od: '-x', kind: 'outer' },
-  { id: 'd-pn1', label: 'Cửa phòng ngủ 1', room: 'Phòng ngủ 1', axis: 'x', at: 5.0, hinge: 6.17, len: 0.9, cd: '-x', od: '+z', kind: 'inner', h: 2.2 },
-  { id: 'd-pn2', label: 'Cửa phòng ngủ 2', room: 'Phòng ngủ 2', axis: 'x', at: 5.0, hinge: 9.85, len: 0.9, cd: '-x', od: '+z', kind: 'inner', h: 2.2 },
+  { id: 'd-pn1', label: 'Cửa phòng ngủ 1', room: 'Phòng ngủ 1', axis: 'x', at: 5.0, hinge: 5.85, len: 0.9, cd: '-x', od: '+z', kind: 'inner', h: 2.2 },
+  { id: 'd-pn2', label: 'Cửa phòng ngủ 2', room: 'Phòng ngủ 2', axis: 'x', at: 5.0, hinge: 10.07, len: 0.9, cd: '-x', od: '+z', kind: 'inner', h: 2.2 },
   { id: 'd-pn3', label: 'Cửa phòng ngủ 3', room: 'Phòng ngủ 3', axis: 'x', at: 4.0, hinge: 10.15, len: 0.9, cd: '+x', od: '-z', kind: 'inner', h: 2.2 },
-  { id: 'd-wc1', label: 'Cửa WC1', room: 'WC1', axis: 'x', at: 6.25, hinge: 12.24, len: 0.7, cd: '-x', od: '+z', kind: 'wc' },
-  { id: 'd-wc2', label: 'Cửa WC2', room: 'WC2', axis: 'x', at: 6.25, hinge: 13.57, len: 0.7, cd: '-x', od: '+z', kind: 'wc' },
+  { id: 'd-wc1', label: 'Cửa WC1', room: 'WC1', axis: 'x', at: 6.1, hinge: 12.24, len: 0.7, cd: '-x', od: '+z', kind: 'wc' },
+  { id: 'd-wc2', label: 'Cửa WC2', room: 'WC2', axis: 'x', at: 6.1, hinge: 13.57, len: 0.7, cd: '-x', od: '+z', kind: 'wc' },
 ];
 /** A window opening [x0, z0, x1, z1, y0, y1] in default plan coords (the box spans the wall thickness). */
 export interface WinSpec { id: string; label: string; room: string; rect: [number, number, number, number, number, number]; style: 'triple' | 'quad' | 'awning' | 'double' }
 export const WIN_SPECS: WinSpec[] = [
   { id: 'w-khach', label: 'Cửa sổ phòng khách (4 cánh, 2,44 m)', room: 'Phòng khách', rect: [2.38, -0.02, 4.82, 0.22, 0.9, 2.7], style: 'quad' },
-  { id: 'w-bep2', label: 'Cửa sổ bếp 0,8 m (thay cửa phụ)', room: 'Bếp + ăn', rect: [6.62, -0.02, 7.42, 0.22, 0.9, 2.7], style: 'double' },
   { id: 'w-bep', label: 'Cửa sổ bếp (hất lên)', room: 'Bếp + ăn', rect: [7.97, -0.02, 9.17, 0.22, 0.9, 1.7], style: 'awning' },
-  { id: 'w-pn3t', label: 'Cửa sổ mặt tiền', room: 'Phòng ngủ 3', rect: [10.15, -0.02, 11.3, 0.22, 0.9, 2.7], style: 'double' },
-  { id: 'w-tho', label: 'Cửa sổ phòng thờ (3 cánh)', room: 'Phòng thờ', rect: [THO_X - 0.02, 6.12, THO_X + 0.22, 7.72, 0.9, 2.7], style: 'triple' },
-  { id: 'w-pn1', label: 'Cửa sổ', room: 'Phòng ngủ 1', rect: [3.95, 8.78, 5.1, 9.02, 0.9, 2.7], style: 'double' },
-  { id: 'w-pn2', label: 'Cửa sổ', room: 'Phòng ngủ 2', rect: [8.035, 8.78, 9.185, 9.02, 0.9, 2.7], style: 'double' },
-  { id: 'w-wc1', label: 'Cửa sổ', room: 'WC1', rect: [11.33, 8.78, 11.93, 9.02, 1.6, 2.2], style: 'double' },
-  { id: 'w-wc2', label: 'Cửa sổ', room: 'WC2', rect: [12.81, 8.78, 13.41, 9.02, 1.6, 2.2], style: 'double' },
+  { id: 'w-pn3t', label: 'Cửa sổ mặt tiền 1,39 m', room: 'Phòng ngủ 3', rect: [10.16, -0.02, 11.55, 0.22, 0.9, 2.7], style: 'double' },
+  { id: 'w-tho', label: 'Cửa sổ phòng thờ (3 cánh, 1,7 m)', room: 'Phòng thờ', rect: [THO_X - 0.02, 6.07, THO_X + 0.22, 7.77, 0.9, 2.7], style: 'triple' },
+  { id: 'w-pn1', label: 'Cửa sổ 1,39 m', room: 'Phòng ngủ 1', rect: [3.83, 8.78, 5.22, 9.02, 0.9, 2.7], style: 'double' },
+  { id: 'w-pn2', label: 'Cửa sổ 1,39 m', room: 'Phòng ngủ 2', rect: [7.915, 8.78, 9.305, 9.02, 0.9, 2.7], style: 'double' },
+  { id: 'w-wc1', label: 'Cửa sổ (1 cánh hất lên)', room: 'WC1', rect: [11.33, 8.78, 11.93, 9.02, 1.6, 2.2], style: 'awning' },
+  { id: 'w-wc2', label: 'Cửa sổ (1 cánh hất lên)', room: 'WC2', rect: [12.81, 8.78, 13.41, 9.02, 1.6, 2.2], style: 'awning' },
   // west wall (x = 14; the porch side x = 0 faces east): beside the washing machine
   { id: 'w-giat', label: 'Cửa sổ cạnh máy giặt', room: 'Lavabo', rect: [13.78, 5.25, 14.02, 5.95, 1.1, 2.0], style: 'double' },
 ];
@@ -122,23 +133,23 @@ export interface RoomDim {
 // Figures as printed on the floor plan (14 m x 9 m, facade = z 0). Hành lang has no area on the
 // plan, so it is computed from the model.
 export const ROOM_DIMS: RoomDim[] = [
-  { room: 'Sảnh', title: 'Hiên', rect: [0, 0, 1.0, 4.95], w: '1', d: '4.95', area: '4.95' },
+  { room: 'Sảnh', title: 'Hiên', rect: [-0.8 - PORCH_OUT, 0, 1.0, 4.95], w: '2.45', d: '4.95', area: '12.13' },
   { room: 'Phòng khách', title: 'Phòng khách', rect: [1.2, 0.2, 5.95, 4.95], w: '4.8', d: '4.75', area: '22.80' },
   { room: 'Bếp + ăn', title: 'Bếp + ăn', rect: [5.95, 0.2, 9.95, 4.95], w: '3.95', d: '4.75', area: '18.76' },
   { room: 'Phòng ngủ 3', title: 'P. ngủ 3', rect: [10.05, 0.2, 13.8, 3.95], w: '3.75', d: '3.75', area: '14.06' },
   { room: 'Hành lang', title: 'Hành lang', rect: [10.05, 4.05, 13.8, 4.95], w: '3.75', d: '0.9', area: '≈3.38' },
   { room: 'Phòng thờ', title: 'P. thờ', rect: [0.14, 5.05, 2.55, 8.8], w: '2.41', d: '3.75', area: '9.04' },
-  { room: 'Phòng ngủ 1', title: 'Phòng ngủ 1', rect: [2.65, 5.05, 6.4, 8.8], w: '3.75', d: '3.75', area: '14.06' },
-  { room: 'Phòng ngủ 2', title: 'Phòng ngủ 2', rect: [6.5, 5.05, 10.72, 8.8], w: '4.22', d: '3.75', area: '15.83' },
-  { room: 'Lavabo', title: 'Giặt + rửa', rect: [10.82, 5.05, 13.8, 6.2], w: '2.98', d: '1.15', area: '3.43' },
-  { room: 'WC1', title: 'WC1', rect: [10.84, 6.32, 12.44, 8.78], w: '1.6', d: '2.46', area: '3.94' },
-  { room: 'WC2', title: 'WC2', rect: [12.58, 6.32, 13.78, 8.78], w: '1.2', d: '2.46', area: '2.95' },
+  { room: 'Phòng ngủ 1', title: 'Phòng ngủ 1', rect: [2.71, 5.05, 6.5, 8.8], w: '3.79', d: '3.75', area: '14.21' },
+  { room: 'Phòng ngủ 2', title: 'Phòng ngủ 2', rect: [6.66, 5.05, 10.72, 8.8], w: '4.06', d: '3.75', area: '15.23' },
+  { room: 'Lavabo', title: 'Giặt + rửa', rect: [10.82, 5.05, 13.8, 6.05], w: '2.98', d: '1.0', area: '2.98' },
+  { room: 'WC1', title: 'WC1', rect: [10.84, 6.17, 12.44, 8.78], w: '1.6', d: '2.61', area: '4.18' },
+  { room: 'WC2', title: 'WC2', rect: [12.58, 6.17, 13.78, 8.78], w: '1.2', d: '2.61', area: '3.13' },
 ];
 
 // Rigid spans in default plan coords: wall thickness (walls running along z for X, along x for Z, incl. the WC
 // tile skins). Door and window openings are added per layout in PlanMap. Keep in sync with WALLS in house.ts.
-const WALL_RIGID_X: [number, number][] = [[THO_X, THO_X + 0.2], [1.0, 1.2], [2.55, 2.65], [6.4, 6.5], [9.95, 10.05], [10.72, 10.84], [12.44, 12.58], [13.78, 14]];
-const WALL_RIGID_Z: [number, number][] = [[0, 0.2], [3.95, 4.05], [4.95, 5.05], [6.2, 6.32], [8.78, 9]];
+const WALL_RIGID_X: [number, number][] = [[THO_X, THO_X + 0.2], [1.0, 1.2], [2.55, 2.71], [6.5, 6.66], [9.95, 10.05], [10.72, 10.84], [12.44, 12.58], [13.78, 14]];
+const WALL_RIGID_Z: [number, number][] = [[0, 0.2], [3.95, 4.05], [4.95, 5.05], [6.05, 6.17], [8.78, 9]];
 
 class Axis {
   private b: number[];
@@ -190,11 +201,11 @@ export class PlanMap {
     this.z = new Axis(rz, dz);
   }
   /** The three hip roofs in EDITED plan coords, with overrides applied. Each has its own slope t = rise / half
-   *  width (default 30°). Main: left edge fixed at x 0.2, longer toward the west, wider on both sides. Sub roofs
+   *  width (default i = 57 %). Main: left edge fixed at x 0.4, longer toward the west, wider on both sides. Sub roofs
    *  (ancestor room, porch): the end inside the main roof (x 4.0) is fixed, longer toward the east; each keeps the
    *  edge it shares with the other one (thờ grows north, sảnh grows south). */
   get roofs() {
-    const slope = Math.tan(Math.PI / 6), mx = this.mx, mz = this.mz;
+    const slope = 0.57, mx = this.mx, mz = this.mz; // i = 57 % (≈ 29.7°), the reference set's tiled-roof slope
     const make = (o: RoofOverride, x0: number, x1: number, z0: number, z1: number, grow: 'x1' | 'x0', side: 'mid' | 'z1' | 'z0') => {
       const dL = x1 - x0, dW = z1 - z0, L = o.l ?? dL, W = o.w ?? dW, rise = o.h ?? (W / 2) * slope;
       const X0 = grow === 'x1' ? x0 : x1 - L, X1 = grow === 'x1' ? x0 + L : x1;
@@ -203,9 +214,12 @@ export class PlanMap {
     };
     const l = this.layout;
     return {
-      main: make(l.roof ?? {}, mx(0.2), mx(14.8), mz(-0.8), mz(9.8), 'x1', 'mid'),
-      tho: make(l.subRoofs?.tho ?? {}, mx(THO_X - 0.8), mx(4.0), mz(4.9), mz(9.4), 'x0', 'z1'),
-      sanh: make(l.subRoofs?.sanh ?? {}, mx(-1.3), mx(4.0), mz(-0.3), mz(5.3), 'x0', 'z0'),
+      // overhangs as in the reference section 1-1: a BTCT eave slab 600 out from the outer wall faces (880 from the
+      // porch column centres) and the tiles 80 beyond it, so the tile edge is 680 / 960 out
+      main: make(l.roof ?? {}, mx(0.32), mx(14.68), mz(-0.68), mz(9.68), 'x1', 'mid'),
+      tho: make(l.subRoofs?.tho ?? {}, mx(THO_X - 0.68), mx(4.0), mz(4.95 - 0.68), mz(9.68), 'x0', 'z1'),
+      // porch: the same overhang beyond both column centres (z 0.11, 4.84) so its two side slopes are equal; its north side tucks under the thờ wing
+      sanh: make(l.subRoofs?.sanh ?? {}, mx(-0.625 - PORCH_OUT - 0.96), mx(4.0), mz(0.11 - 0.96), mz(4.84 + 0.96), 'x0', 'z0'),
     };
   }
   get roof() { return this.roofs.main; }

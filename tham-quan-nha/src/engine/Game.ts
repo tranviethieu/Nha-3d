@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CSS3DObject, CSS3DRenderer } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 import { buildHouse, toWorld, type Bed, type Door, type House, type Leaf, type ObjInfo, type Seat, type Win } from './house';
-import { PlanMap, emptyLayout, fmtM, normalizeLayout, parseYouTube, DOOR_SPECS, ROOM_DIMS, TV_DEFAULT_URL, type Layout } from './layout';
+import { PlanMap, emptyLayout, fmtM, normalizeLayout, parseYouTube, DOOR_SPECS, GROUND, ROOM_DIMS, TV_DEFAULT_URL, type Layout } from './layout';
 import { HIP, makeCharacter, poseCharacter, restPose, type Character } from './character';
 import { blocked, floorTop, leafSegment, STEP } from './collision';
 import { Minimap } from './minimap';
@@ -15,6 +15,8 @@ export interface HudState {
   mode: Mode;
   // overview
   roofOn: boolean;
+  /** the WC slab / storage-loft floor ("mái kho") shown */
+  loftOn: boolean;
   rackDown: boolean;
   anyDoorClosed: boolean;
   anyWindowClosed: boolean;
@@ -46,7 +48,7 @@ export interface HudState {
 const WALK = 1.7, RUN = 3.6, GRAVITY = 9.8, JUMP = 3.6;
 const HEIGHT = 1.7, EYE = 1.58;
 const roomTitle = (r: string) => ROOM_DIMS.find(d => d.room === r)?.title ?? r;
-const [SX, SZ] = toWorld(-3.4, 2.6); // in the yard, facing the front porch
+const [SX, SZ] = toWorld(-4.0, 2.6); // in the yard, facing the front porch
 const START = { x: SX, z: SZ, face: Math.PI / 2, yaw: -Math.PI / 2 };
 const MOVE_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 type V3 = [number, number, number];
@@ -77,10 +79,12 @@ export class Game {
 
   // overview state
   private roofOn = false;
+  /** WC slab at +2.4 ("mái kho"): shown unless hidden to look down into the WCs (overview only) */
+  private loftOn = true;
   private savedOverview: { pos: THREE.Vector3; target: THREE.Vector3 } | null = null;
 
   // player (tour)
-  private p = { x: START.x, z: START.z, y: -0.3, vy: 0, face: START.face, speed: 0, phase: 0, onGround: true };
+  private p = { x: START.x, z: START.z, y: GROUND, vy: 0, face: START.face, speed: 0, phase: 0, onGround: true };
   /** Lying on a bed or sitting on a seat; `back` is where to stand up again. */
   private lying: { kind: 'lie' | 'sit'; top: number; back: { x: number; z: number; y: number } } | null = null;
   private yaw = START.yaw; private pitch = 0.38; private fpPitch = 0; private dist = 4.2;
@@ -228,7 +232,7 @@ export class Game {
   designData() {
     const S = this.house.structure;
     return { map: this.map, mirrorZ: this.house.mirrorZ, walls: this.house.walls, structure: { columns: S.columns, footings: S.footings, groundBeam: S.groundBeam, tieBeam: S.tieBeam, cols: S.cols, beams: S.beams },
-      openings: this.openings(), objects: this.house.objects, fixtures: this.house.lights.fixtures, rooms: this.roomSizes(), roofs: this.map.roofs };
+      openings: this.openings(), objects: this.house.objects, fixtures: this.house.lights.fixtures, rooms: this.roomSizes(), roofs: this.map.roofs, roofFrame: this.house.roofFrame };
   }
   /** Render one view off-screen and return it as a PNG data URL. Orthographic views take the half extents of the
    *  frame in world metres; `clipY` cuts everything above that height (floor plans); `structure` shows the frame
@@ -328,6 +332,7 @@ export class Game {
     this.camera.position.set(...p); this.controls.target.set(...tg); this.controls.update();
   }
   setRoof = (on: boolean) => { this.roofOn = on; };
+  toggleLoft = () => { this.loftOn = !this.loftOn; this.onToast(this.loftOn ? 'Đã hiện mái kho (trần WC)' : 'Đã ẩn mái kho (trần WC)'); };
   toggleRoof = () => this.setRoof(!this.roofOn);
   viewWC = () => {
     this.setRoof(false); this.house.wcDoors.forEach(d => this.setDoor(d, true));
@@ -342,7 +347,7 @@ export class Game {
   toggleDims = () => {
     this.dimsOn = !this.dimsOn;
     // the overlay is a floor plan: hide the roof so it can be read from above
-    if (this.dimsOn && this.mode === 'overview') this.roofOn = false;
+    if (this.dimsOn && this.mode === 'overview') this.setRoof(false);
     this.onToast(this.dimsOn ? 'Đang hiện kích thước (theo bản vẽ thực tế)' : 'Đã ẩn kích thước');
   };
   toggleAllWardrobes = () => { const open = this.house.wardrobes.some(w => !w.open); this.house.wardrobes.forEach(w => this.setWin(w, open)); };
@@ -388,7 +393,7 @@ export class Game {
   goHome = (toast = true) => {
     if (this.lying) this.standUp();
     const sz = this.house.mirrorZ === null ? START.z : this.house.mirrorZ - START.z; // in front of the porch
-    Object.assign(this.p, { x: START.x, z: sz, y: -0.3, vy: 0, face: START.face, speed: 0 });
+    Object.assign(this.p, { x: START.x, z: sz, y: GROUND, vy: 0, face: START.face, speed: 0 });
     this.yaw = START.yaw; this.pitch = 0.38; this.camTarget.set(START.x, 1.2, sz);
     if (toast) this.onToast('Đã về trước cửa chính');
   };
@@ -500,7 +505,7 @@ export class Game {
     if ('win' in n) return n.win.open ? 'Đóng cửa sổ' : 'Mở cửa sổ';
     if ('wardrobe' in n) return `${n.wardrobe.open ? 'Đóng' : 'Mở'} ${n.wardrobe.name ?? 'tủ'}`;
     if ('tv' in n) return this.tv ? 'Tắt tivi' : 'Bật tivi (YouTube)';
-    if ('lamp' in n) return `${this.roomOn[n.lamp] ? 'Tắt' : 'Bật'} đèn ${roomTitle(n.lamp)} (công tắc 2 chiều)`;
+    if ('lamp' in n) return `${this.roomOn[n.lamp] ? 'Tắt' : 'Bật'} đèn ${roomTitle(n.lamp)}`;
     if ('seat' in n) return n.seat.kind === 'sofa' ? 'Ngồi sofa' : n.seat.kind === 'desk' ? 'Ngồi vào bàn học' : 'Ngồi ghế';
     return 'Nằm lên giường';
   }
@@ -622,6 +627,7 @@ export class Game {
     let room: string | null = null, n: Interactable | null = null;
     if (this.mode === 'overview') {
       h.roof.visible = this.roofOn && !this.structOn && !this.pipesOn;
+      h.loft.visible = this.loftOn;
       h.labels.forEach(s => { s.visible = !this.roofOn && !this.dimsOn; });
       this.dims.group.visible = this.dimsOn && !this.roofOn;
       this.dims.rooms.forEach(g => { g.visible = true; }); this.dims.exterior.visible = true;
@@ -630,6 +636,7 @@ export class Game {
       this.updatePlayer(dt, now);
       room = roomAt(this.p.x, this.p.z);
       h.roof.visible = this.roofMode === 'on' || (this.roofMode === 'auto' && !room && !this.firstPerson && !this.aerial);
+      h.loft.visible = true;
       h.labels.forEach(s => { s.visible = false; });
       // while touring, only annotate the room you are in (or the outside dimensions in the yard)
       this.dims.group.visible = this.dimsOn;
@@ -640,7 +647,7 @@ export class Game {
     }
 
     const hud: HudState = {
-      mode: this.mode, roofOn: this.roofOn, rackDown: this.rackDown,
+      mode: this.mode, roofOn: this.roofOn, loftOn: this.loftOn, rackDown: this.rackDown,
       anyDoorClosed: h.doors.some(d => !d.open), anyWindowClosed: h.windows.some(w => !w.open), anyWardrobeClosed: h.wardrobes.some(w => !w.open), dimsOn: this.dimsOn,
       room: room ?? (this.mode === 'tour' && this.p.z < -4.5 && this.p.z > -6.1 && this.p.x > -8.3 && this.p.x < this.map.mx(14.6) - 7 ? 'Lối đi bên hông' : 'Sân vườn'), prompt: this.mode === 'tour' ? this.promptFor(n) : null,
       firstPerson: this.firstPerson, aerial: this.aerial, roofMode: this.roofMode, lying: this.lying?.kind === 'lie', sitting: this.lying?.kind === 'sit',
@@ -726,9 +733,8 @@ export class Game {
     this.raycaster.set(this.camTarget, off); this.raycaster.far = this.dist;
     // door, wardrobe and window leaves block too (when open they have swung out of the way)
     const leaves = [...this.house.doors, ...this.house.wardrobes.flatMap(w => w.leaves), ...this.house.windows.flatMap(w => w.leaves)].map(l => l.g.children[0]);
-    const obs: THREE.Object3D[] = this.house.roof.visible
-      ? [...this.house.occluders, ...leaves, ...this.house.roof.children.filter(c => (c as THREE.Mesh).isMesh)]
-      : [...this.house.occluders, ...leaves];
+    const roofMeshes = (g: THREE.Group) => g.visible ? g.children.filter(c => (c as THREE.Mesh).isMesh) : [];
+    const obs: THREE.Object3D[] = [...this.house.occluders, ...leaves, ...roofMeshes(this.house.roof)];
     const hit = this.raycaster.intersectObjects(obs, false)[0];
     const d = hit ? Math.max(0.35, hit.distance - 0.2) : this.dist;
     cam.position.copy(this.camTarget).addScaledVector(off, d);
