@@ -2,9 +2,9 @@
 // All helpers take PLAN coordinates in meters (house spans x 0..14, z 0..9);
 // they subtract (7, 4.5) so the house is centered on the world origin.
 import * as THREE from 'three';
-import { BED_LIGHTS, ELEC, bedLamp } from './electrical';
-import { PIPES, PIPE_STYLE, SHAFT, FLOOR_DRAINS, SEPTIC, MANHOLES, VALVES, TAPS, TANK, SOLAR } from './plumbing';
-import { LIGHT_SPACING, MAIN_SIDE, MAIN_TRANSOM, PlanMap, ROOM_DIMS, THO_SCREEN, THO_X, GROUND, PORCH_OUT, RISERS, RISE, emptyLayout, type Layout } from './layout';
+import { BED_LIGHTS, ELEC, OUT_EAVE, OUT_PORCH, OUT_WASH, bedLamp } from './electrical';
+import { PIPES, PIPE_STYLE, ROOF_DRAIN, RAIN_PITS, SHAFT, FLOOR_DRAINS, SEPTIC, MANHOLES, VALVES, TAPS, TANK, SOLAR } from './plumbing';
+import { LIGHT_SPACING, MAIN_SIDE, MAIN_TRANSOM, PlanMap, ROOM_DIMS, THO_SCREEN, THO_X, GROUND, PORCH_OUT, PORCH_NZ, PORCH_COL, PORCH_FLOOR, PORCH_EAVE, RISERS, RISE, emptyLayout, type Layout } from './layout';
 
 export type Dir = '+x' | '-x' | '+z' | '-z';
 /** Axis-aligned box in WORLD coordinates. */
@@ -60,7 +60,7 @@ export interface House {
   roofFrame: RoofFrame;
   structure: { group: THREE.Group; columns: number; footings: number; groundBeam: number; tieBeam: number;
     /** Column centres and tie-beam centre lines in EDITED plan coords (for the labelled C / D plan in the PDF). */
-    cols: { x: number; z: number; porch: boolean }[]; beams: { x0: number; z0: number; x1: number; z1: number; porch: boolean }[] };
+    cols: { x: number; z: number; porch: boolean; /** footing type MĐ1…MĐ4 and size (m); '' / 0 on the porch */ foot: string; B: number; /** C1 / C2 / C3 */ ct: string; trib: number }[]; beams: { x0: number; z0: number; x1: number; z1: number; porch: boolean }[] };
   /** Wall boxes [x0, z0, x1, z1] in DEFAULT plan coords (map them with mx / mz), for drawn floor plans. */
   walls: number[][];
   /** Light switches (WORLD x, z) and the light group they toggle (a room, or `bedLamp(room)`). */
@@ -94,7 +94,7 @@ export interface HouseLights {
   /** Indoor lights per group (a ROOM_DIMS key, or `bedLamp(room)` for a bed-foot light), switched by its switches. */
   rooms: Record<string, { points: { light: THREE.PointLight; on: number }[]; glows: THREE.Object3D[]; bulb: THREE.MeshBasicMaterial }>;
   /** Ceiling fixtures in EDITED plan coords, for the electrical plan. */
-  fixtures: { x: number; z: number; kind: 'down' | 'ceiling' | 'pendant' | 'fan'; room: string }[];
+  fixtures: { x: number; z: number; kind: 'down' | 'spot' | 'ceiling' | 'pendant' | 'fan' | 'porch' | 'sconce' | 'eave'; room: string }[];
 }
 /** An editable piece of furniture. Sizes are in meters: w along x, d along z, h height. */
 export interface ObjInfo {
@@ -225,7 +225,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   const site1=scene.children.length,siteF1=floors.length,siteS1=solids.length; // the site: not mirrored
   box(0,0,14,9,GROUND,0,M(0xcfc9be));box(THO_X,4.95,0,9,GROUND,0,M(0xcfc9be)); // + the ancestor room's front strip
   const PO=PORCH_OUT; // porch pushed out (deeper porch)
-  box(-0.8-PO,0,0,4.95,GROUND,0,M(0xe2ddd4));
+  box(1.0-PORCH_FLOOR,0,0,4.95,GROUND,0,M(0xe2ddd4));box(1.0-PORCH_FLOOR,4.95,-0.4,5.45,GROUND,0,M(0xe2ddd4)); // under the north column
   // ---- porch front, after the owner's reference photo but in the house colours ('Phào dưới' stone, 'Cột' caps): steps
   // between two stone pedestals (capstones, a white pot with a dracaena on each) in front of the porch columns, marble column bases, and a low
   // stone-kerbed planting bed along the ancestor room's front wall under its window ----
@@ -239,25 +239,19 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     return new THREE.MeshStandardMaterial({map:t,roughness:0.35,metalness:0.05});};
   const marble=marbleOf(map.color('bottomBand'));
   const capWhite=M(map.color('column')),granite=M(map.color('bottomBand')),nosing=M(new THREE.Color(map.color('bottomBand')).lerp(new THREE.Color(0xffffff),0.25).getHex());
-  // steps (bậc tam cấp): RISERS (5) risers of ≈152 from the yard at −0.76, 300 treads, between the pedestals (z 0.55..4.4)
-  const S0=0.55,S1=4.4;
-  const SE=-0.8-PO,SX0=SE-RISERS*0.3; // porch edge, foot of the steps (RISERS treads of 300)
+  // steps (bậc tam cấp): RISERS (5) risers of ≈152 from the yard at −0.76, 300 treads, between the cheek walls (z 0.51..4.66)
+  const S0=0.51,S1=4.66;
+  const SE=1.0-PORCH_FLOOR,SX0=SE-RISERS*0.3; // porch edge, foot of the steps (RISERS treads of 300)
   for(let k=0;k<RISERS;k++){const x=SE-(RISERS-k)*0.3,y0=GROUND+k*RISE,y1=GROUND+(k+1)*RISE;
     box(x,S0,SE,S1,y0,y1,granite);box(x-0.005,S0,x+0.03,S1,y1-0.02,y1+0.002,nosing,false);}
-  // pedestals (bệ đá) in front of the porch columns, flanking the steps, with a pot + dracaena on each
-  const potMat=M(map.color('column')),leaf=M(0x3f7a3a),leaf2=M(0x5c9a4a),stem=M(0x6b5640);
-  const plant=(x:number,z:number,y:number)=>{const X=x-7,Z=z-4.5;
-    const pot=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.15,0.5,24),potMat);pot.position.set(X,y+0.25,Z);scene.add(pot);
-    const soil=new THREE.Mesh(new THREE.CylinderGeometry(0.185,0.185,0.01,20),M(0x4a3a2c));soil.position.set(X,y+0.48,Z);scene.add(soil);
-    [[0,0,0.95],[0.06,0.05,0.7],[-0.06,-0.03,0.55]].forEach(([dx,dz,h],i)=>{
-      const st=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.018,h,6),stem);st.position.set(X+dx,y+0.48+h/2,Z+dz);scene.add(st);
-      for(let k=0;k<12;k++){const a=k/12*Math.PI*2+i,b=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.006,0.035),k%2?leaf:leaf2);
-        b.position.set(X+dx+Math.cos(a)*0.15,y+0.48+h-0.02,Z+dz+Math.sin(a)*0.15);b.rotation.set(0,-a,(k%3-1)*0.35+0.45);scene.add(b);}});};
-  for(const [z0,z1] of [[-0.2,S0],[S1,5.15]]){
-    box(SX0-0.05,z0,-0.86-PO,z1,GROUND,0.26,marble);box(SX0-0.08,z0-0.03,-0.86-PO,z1+0.03,0.26,0.32,capWhite);
-    plant((SX0-0.05-0.86-PO)/2,(z0+z1)/2,0.32);}
+  const leaf2=M(0x5c9a4a);
+  // stair cheek walls (bờ tường bậc tam cấp) flanking the steps, centred on the porch column lines, top flush with the
+  // porch floor (owner's reference): the porch columns stand on them (each wall runs out past its column base); no pots
+  for(const [z0,z1] of [[0.11-0.4,S0],[S1,PORCH_NZ+0.4]]){
+    const cx0=Math.min(SX0-0.05,PORCH_COL-0.45);
+    box(cx0,z0,SE,z1,GROUND,-0.04,marble);box(cx0-0.03,z0-0.03,SE,z1+0.03,-0.04,0,capWhite);}
   // planting bed along the ancestor room's front wall (x THO_X), from the right pedestal to the back corner
-  {const bx0=-0.75,bx1=THO_X,bz0=5.18,bz1=8.95,kerb=M(map.color('bottomBand')),kh=GROUND+0.28;
+  {const bx0=-0.75,bx1=THO_X,bz0=5.49,bz1=8.95,kerb=M(map.color('bottomBand')),kh=GROUND+0.28;
     box(bx0,bz0,bx0+0.08,bz1,GROUND,kh,kerb);box(bx0,bz0,bx1,bz0+0.08,GROUND,kh,kerb);box(bx0,bz1-0.08,bx1,bz1,GROUND,kh,kerb);
     box(bx0+0.08,bz0+0.08,bx1,bz1-0.08,GROUND,kh-0.05,M(0x5a4532),false);
     const bush=[M(0x2f6b34),M(0x3d7d3a),M(0x4f8f45)];
@@ -265,18 +259,46 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
       const m=new THREE.Mesh(new THREE.SphereGeometry(r,14,10),bush[i%3]);m.scale.set(1,0.8,1);m.position.set((bx0+bx1)/2-7,kh-0.05+r*0.7,z-4.5);scene.add(m);
       if(i%2===0)for(let k=0;k<5;k++){const a=k/5*Math.PI*2,lf=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,6),leaf2);lf.scale.set(1.3,0.12,0.7);
         lf.position.set((bx0+bx1)/2-7+Math.cos(a)*0.16,kh+0.35+k*0.03,z-4.5+Math.sin(a)*0.16);lf.rotation.set(0,-a,0.5);scene.add(lf);}}}
-  [[-0.8-PORCH_OUT,0,1.0,4.95,0xe7c3ae],[1.2,0.2,5.95,4.95,0xeeeae4],[5.95,0.2,9.95,4.95,0xe6dfd1],[10.05,4.05,13.8,4.95,0xe6dfd1],[10.05,0.2,13.8,3.95,0xc9a982],[THO_X+0.2,5.05,2.55,8.8,0xd8c3a5],[2.71,5.05,6.5,8.8,0xc9a982],[6.66,5.05,10.72,8.8,0xc9a982],[10.82,5.05,13.8,6.05,0xdfe3e6],[10.82,6.15,12.46,8.8,0xd6dadd],[12.56,6.15,13.8,8.8,0xd6dadd]].forEach(f=>box(f[0],f[1],f[2],f[3],0,0.012,M(f[4]),false));
+  // Floor and wall tiles (owner's choice): 800 × 800 white cloud marble (trắng vân mây) in every dry room and on the
+  // porch; the bathrooms (WC1, WC2, the Lavabo / washing zone) 400 × 400 grey anti-slip on the floor, WC walls 800 × 400
+  // grey to the WC ceiling. One canvas tile each (with its 3 mm joint), repeated per surface from its corner.
+  const tileCanvas=(kind:'marble'|'wcFloor'|'wcWall')=>{const W=512,H=kind==='wcWall'?256:512,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d')!;
+    let seed=kind.length*977;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647;};
+    if(kind==='marble'){g.fillStyle='#f4f3f0';g.fillRect(0,0,W,H);
+      for(let i=0;i<70;i++){const x=rnd()*W,y=rnd()*H,r=30+rnd()*110,gr=g.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,`rgba(196,198,204,${0.05+rnd()*0.08})`);gr.addColorStop(1,'rgba(196,198,204,0)');g.fillStyle=gr;g.fillRect(0,0,W,H);}
+      for(let v=0;v<7;v++){let x=rnd()*W,y=rnd()*H,a=rnd()*Math.PI*2;g.strokeStyle=`rgba(150,154,162,${0.25+rnd()*0.3})`;g.lineWidth=0.6+rnd()*1.4;g.beginPath();g.moveTo(x,y);
+        for(let k=0;k<40;k++){a+=(rnd()-0.5)*0.7;x+=Math.cos(a)*9;y+=Math.sin(a)*9;g.lineTo(x,y);}g.stroke();}}
+    else{const base=kind==='wcWall'?[128,133,139]:[150,154,158];g.fillStyle=`rgb(${base})`;g.fillRect(0,0,W,H);
+      const img=g.getImageData(0,0,W,H);for(let i=0;i<img.data.length;i+=4){const n=(rnd()-0.5)*(kind==='wcWall'?10:18);img.data[i]+=n;img.data[i+1]+=n;img.data[i+2]+=n;}g.putImageData(img,0,0);
+      if(kind==='wcWall')for(let v=0;v<5;v++){let x=rnd()*W,y=rnd()*H,a=rnd()*0.6-0.3;g.strokeStyle='rgba(175,180,186,.35)';g.lineWidth=1;g.beginPath();g.moveTo(x,y);for(let k=0;k<30;k++){a+=(rnd()-0.5)*0.4;x+=Math.cos(a)*10;y+=Math.sin(a)*6;g.lineTo(x,y);}g.stroke();}}
+    g.strokeStyle=kind==='marble'?'#cfcac0':'#6d7378';g.lineWidth=3;g.strokeRect(1.5,1.5,W-3,H-3);
+    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=8;t.colorSpace=THREE.SRGBColorSpace;return t;};
+  const TILE_TEX={marble:tileCanvas('marble'),wcFloor:tileCanvas('wcFloor'),wcWall:tileCanvas('wcWall')};
+  /** a material of that tile repeated over a u × v metre face (tile tu × tv metres) */
+  const tileMat=(k:keyof typeof TILE_TEX,u:number,v:number,tu:number,tv:number)=>{const t=TILE_TEX[k].clone();t.needsUpdate=true;t.repeat.set(u/tu,v/tv);
+    return new THREE.MeshStandardMaterial({map:t,roughness:k==='marble'?0.22:0.6,metalness:0});};
+  for(const [x0,z0,x1,z1,k] of [[1.0-PORCH_FLOOR,0,1.0,4.95,'marble'],[1.2,0.2,5.95,4.95,'marble'],[5.95,0.2,9.95,4.95,'marble'],[10.05,4.05,13.8,4.95,'marble'],[10.05,0.2,13.8,3.95,'marble'],[THO_X+0.2,5.05,2.55,8.8,'marble'],[2.71,5.05,6.5,8.8,'marble'],[6.66,5.05,10.72,8.8,'marble'],
+    [10.82,5.05,13.8,6.05,'wcFloor'],[10.82,6.15,12.46,8.8,'wcFloor'],[12.56,6.15,13.8,8.8,'wcFloor']] as [number,number,number,number,'marble'|'wcFloor'][]){
+    const T=k==='marble'?0.8:0.4;box(x0,z0,x1,z1,0,0.012,tileMat(k,x1-x0,z1-z0,T,T),false);}
   box(2.2,1.3,5.0,3.0,0.012,0.02,M(0xd9d2c4),false);
-  { // ancestor-room floor: 800 × 800 tiles with 3 mm joints, three across (2.41 m wide room), laid from the front wall
-    const grout=M(0xb59f82),gx=THO_X+0.2+0.002,T=0.8,J=0.003;
-    for(let k=1;k<3;k++){const x=gx+k*T+(k-1)*J;box(x,5.05,x+J,8.8,0.02,0.0206,grout,false);}
-    for(let z=5.052+T;z<8.79;z+=T+J)box(THO_X+0.2,z,2.55,z+J,0.02,0.0206,grout,false);}
-  const showerTile=M(0x6c747c);
-  box(10.84,7.65,12.44,8.78,0.012,0.02,showerTile,false);box(12.58,6.17,13.78,7.6,0.012,0.02,showerTile,false);
   // Window openings [x0,z0,x1,z1,y0,y1] (plan). The original drew glass over solid walls;
   // here walls are cut around them so the sashes can swing open.
   // openings hidden in Cài đặt → Cửa are simply not built: no hole, no leaf, the wall stays closed
   const WINS=map.windows.filter(w=>!w.hidden),WIN=WINS.map(w=>w.rect),DOORS=map.doors.filter(d=>!d.hidden);
+  // WC wall tiles 800 × 400 grey (owner's choice), floor to the WC ceiling, on the inside faces of both bathrooms,
+  // left open at the doors and windows
+  {const HT=2.4,o=0.02;
+    const skin=(axis:'x'|'z',at:number,a0:number,a1:number,dir:number)=>{
+      const holes:[number,number,number,number][]=[];
+      for(const d of DOORS)if(d.spec.axis===axis&&Math.abs(d.spec.at-at)<0.12)holes.push([d.span[0],d.span[1],0,d.spec.kind==='main'?d.h+MAIN_TRANSOM:d.h]);
+      for(const w of WIN){const [x0,z0,x1,z1,y0,y1]=w;if(axis==='x'&&z0<=at+0.05&&z1>=at-0.05)holes.push([x0,x1,y0,y1]);if(axis==='z'&&x0<=at+0.05&&x1>=at-0.05)holes.push([z0,z1,y0,y1]);}
+      const hs=holes.filter(h=>h[1]>a0&&h[0]<a1).sort((p,q)=>p[0]-q[0]);
+      const piece=(b0:number,b1:number,y0:number,y1:number)=>{if(b1-b0<0.01||y1-y0<0.01)return;const m=tileMat('wcWall',b1-b0,y1-y0,0.8,0.4);
+        const t=m.map!;t.offset.set(((b0-a0)/0.8)%1,(y0/0.4)%1);
+        if(axis==='x')box(b0,Math.min(at,at+dir*o),b1,Math.max(at,at+dir*o),y0,y1,m,false);else box(Math.min(at,at+dir*o),b0,Math.max(at,at+dir*o),b1,y0,y1,m,false);};
+      let c=a0;for(const h of hs){const h0=Math.max(a0,h[0]),h1=Math.min(a1,h[1]);piece(c,h0,0,HT);piece(h0,h1,0,Math.min(HT,h[2]));piece(h0,h1,Math.min(HT,h[3]),HT);c=h1;}piece(c,a1,0,HT);};
+    // WC1 (x 10.82..12.46) and WC2 (x 12.56..13.8), z 6.15..8.8
+    for(const [x0,x1] of [[10.82,12.46],[12.56,13.8]]){skin('x',6.15,x0,x1,1);skin('x',8.8,x0,x1,-1);skin('z',x0,6.15,8.8,1);skin('z',x1,6.15,8.8,-1);}}
   // Door openings as wall holes (the lintel above each one is the wall left over). The main entrance hole also
   // takes the transom (MAIN_TRANSOM above the leaves).
   const doorHole=(d:typeof DOORS[number])=>{const top=d.spec.kind==='main'?d.h+MAIN_TRANSOM:d.h,[a0,a1]=d.span,c=d.spec.at;
@@ -311,8 +333,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     box(o0,z0,o1,z1,oh,oh+0.08,wood,false);                                                               // lintel rail over it
     for(let x=T.x0+0.1;x<T.x1-0.06;x+=0.1){const inOpen=x>o0-0.05&&x<o1+0.05;if(Math.abs(x-o0)<0.07||Math.abs(x-o1)<0.07)continue;
       box(x-0.02,4.985,x+0.02,5.015,inOpen?oh+0.08:0.08,T.top-0.08,wood,false);}}
-  const wcTile=M(0xe9ecee);
-  [[10.82,6.15,10.84,8.8],[12.44,6.15,12.46,8.8],[12.56,6.15,12.58,8.8],[13.78,6.15,13.8,8.8],[10.84,6.15,12.44,6.17],[12.58,6.15,13.78,6.17],[10.84,8.78,12.44,8.8],[12.58,8.78,13.78,8.8]].forEach(w=>wallWithHoles(w,0,2.4,wcTile,false));
+  // (the WC wall tiles, 20 mm on the inside faces, are built below with the openings: 800 × 400 grey)
   // Mouldings (as in the client's reference photo), 4 cm proud of the outside wall faces and cut around doors /
   // windows like the walls. Phào trên: a 0.5 m band right under the eave soffit (main roof; the ancestor wing sits
   // under its lower roof). Phào dưới: plinth from the foundation to 0.45 m, also on the porch-facing walls.
@@ -351,31 +372,35 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   // porch beam (PC). Matching half-depth pilasters on the house wall behind them, and quarter-round arches (vòm) under
   // the porch beams at every support. ----
   {const cm=M(map.color('column')),dk=M(new THREE.Color(map.color('column')).lerp(new THREE.Color(0x8a8f96),0.22).getHex());
-    const CX=-0.625-PO,ZS=[0.11,4.84],WF=1.0,sh0=0.85,sh1=PC-0.28;
+    const CX=PORCH_COL,CB=0,ZS=[0.11,PORCH_NZ],WF=1.0,ZW=4.95,sh0=0.85,sh1=PC-0.28;
     // layers [y0, y1, width]; a pilaster keeps only the part in front of the wall face (x ≤ WF)
+    // off: base raised by the cheek-wall cap for the free columns (the shaft gets shorter, the capital stays at PC)
+    const Lof=(off:number)=>L.map(([y0,y1,w]):[number,number,number]=>y1<=sh0?[y0+off,y1+off,w]:y0===sh0?[y0+off,y1,w]:[y0,y1,w]);
     const L:[number,number,number][]=[[0,0.07,0.70],[0.07,0.15,0.66],[0.15,0.68,0.58],[0.68,0.73,0.64],[0.73,0.80,0.62],[0.80,sh0,0.54],[sh0,sh1,0.48],
       [sh1,sh1+0.03,0.54],[sh1+0.03,PC-0.15,0.48],[PC-0.15,PC-0.12,0.54],[PC-0.12,PC-0.04,0.58],[PC-0.04,PC,0.64]];
-    const column=(cx:number,cz:number,wall:boolean)=>{
-      for(const [y0,y1,w] of L){const x0=cx-w/2,x1=wall?Math.min(cx+w/2,WF):cx+w/2;box(x0,cz-w/2,x1,cz+w/2,y0,y1,cm,true);}
+    // zMax: the north wall pilaster stops at the ancestor room's wall face (its column sits in the wall line)
+    const column=(cx:number,cz:number,wall:boolean,zMax=Infinity,off=0)=>{
+      for(const [y0,y1,w] of Lof(off)){const x0=cx-w/2,x1=wall?Math.min(cx+w/2,WF):cx+w/2;box(x0,cz-w/2,x1,Math.min(cz+w/2,zMax),y0,y1,cm,true);}
       // sunk panel on the die and the flutes on the shaft, on each visible face
       const faces:[number,number,number,number][]=wall?[[-1,0,0,1],[0,-1,1,0],[0,1,1,0]]:[[-1,0,0,1],[1,0,0,1],[0,-1,1,0],[0,1,1,0]];
       for(const [nx,nz,ux,uz] of faces){
         const strip=(half:number,u:number,du:number,y0:number,y1:number)=>{const px=cx+nx*half,pz=cz+nz*half,a=u-du/2,b=u+du/2;
-          if(wall&&ux!==0&&(cx+b>WF))return;
+          if(wall&&ux!==0&&(cx+b>WF))return;if(pz>zMax||(uz!==0&&cz+b>zMax))return;
           box(ux?cx+a:px-0.004,uz?cz+a:pz-0.004,ux?cx+b:px+0.004,uz?cz+b:pz+0.004,y0,y1,dk,false);};
-        strip(0.29,0,0.32,0.27,0.56);
-        for(const u of [-0.135,0,0.135])strip(0.24,u,0.05,sh0+0.1,sh1-0.08);}};
-    for(const z of ZS){column(CX,z,false);column(WF,z,true);}
+        strip(0.29,0,0.32,0.27+off,0.56+off);
+        for(const u of [-0.135,0,0.135])strip(0.24,u,0.05,sh0+off+0.1,sh1-0.08);}};
+    for(const z of ZS){column(CX,z,false,Infinity,CB);column(WF,z,true,z>ZW?ZW:Infinity);}
     // quarter-round arches under the beams, radius R, at both ends of each beam span
     const R=0.45,fillet=(px:number,pz:number,dx:number,dz:number,w:number)=>{const sh=new THREE.Shape();sh.moveTo(0,0);sh.lineTo(0,-R);sh.absarc(R,-R,R,Math.PI,Math.PI/2,true);sh.lineTo(0,0);
       const g=new THREE.ExtrudeGeometry(sh,{depth:w,bevelEnabled:false,curveSegments:16}),m=new THREE.Mesh(g,cm),a=-Math.atan2(dz,dx);m.rotation.y=a;
       m.position.set(mx(px)-7-Math.sin(a)*w/2,PC,mz(pz)-4.5-Math.cos(a)*w/2);scene.add(m);};
     const cap=0.32;
     fillet(CX,ZS[0]+cap,0,1,0.6);fillet(CX,ZS[1]-cap,0,-1,0.6);                                     // front beam, column to column
-    for(const z of ZS){fillet(CX+cap,z,1,0,0.6);fillet(WF-0.35,z,-1,0,0.6);}                         // side beams, column to wall pilaster
+    fillet(CX+cap,ZS[0],1,0,0.6);fillet(WF-0.35,ZS[0],-1,0,0.6);fillet(CX+cap,ZS[1],1,0,0.6);
+    {const a=ZS[1]-0.3;fillet(WF-0.35,(a+ZW)/2,-1,0,ZW-a);}                         // side beams, column to wall pilaster
     // phào hiên: moulded edges along the porch beams (a fillet at the soffit line and a band under the eave)
     for(const [y0,y1] of [[PC,PC+0.04],[E3-0.25,E3-0.21]] as [number,number][]){
-      const bw=0.35;box(CX-bw,ZS[0]-bw,CX+bw,ZS[1]+bw,y0,y1,cm,true);box(CX-bw,ZS[0]-bw,1.0,ZS[0]+bw,y0,y1,cm,true);box(CX-bw,ZS[1]-bw,1.0,ZS[1]+bw,y0,y1,cm,true);}
+      const bw=0.35;box(CX-bw,ZS[0]-bw,CX+bw,ZS[1]+bw,y0,y1,cm,true);box(CX-bw,ZS[0]-bw,1.0,ZS[0]+bw,y0,y1,cm,true);box(CX-bw,ZS[1]-bw,THO_X,ZS[1]+bw,y0,y1,cm,true);box(THO_X,ZS[1]-bw,1.0,ZW,y0,y1,cm,true);}
     // phào mặt tiền on the ancestor-room front (owner's reference): grooved corner pilasters with base and capital, and
     // a frieze between them under the wall cornice
     const F=THO_X,PT=E1-0.93;
@@ -389,7 +414,9 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   }
   // porch beams: from the column tops up to the soffit, right under the fascia line
   // porch beams (xà) as wide as the column capitals (640), centred on the column lines
-  {const bx=-0.625-PO,bw=0.32;box(bx-bw,0.11-bw,bx+bw,4.84+bw,PC,E3-0.12,colMat);box(bx-bw,0.11-bw,1.0,0.11+bw,PC,E3-0.12,colMat);box(bx-bw,4.84-bw,1.0,4.84+bw,PC,E3-0.12,colMat);}
+  {const bx=PORCH_COL,bw=0.32;box(bx-bw,0.11-bw,bx+bw,PORCH_NZ+bw,PC,E3-0.12,colMat);box(bx-bw,0.11-bw,1.0,0.11+bw,PC,E3-0.12,colMat);
+    // north beam on the middle-wall line: full width out to the ancestor room's front, then only the part in the porch (to the wall face 4.95)
+    box(bx-bw,PORCH_NZ-bw,THO_X,PORCH_NZ+bw,PC,E3-0.12,colMat);box(THO_X,PORCH_NZ-bw,1.0,4.95,PC,E3-0.12,colMat);}
   // Aluminium windows (like the client's reference photo): dark-grey frame, blue-grey reflective glass, each sash
   // with its own aluminium border, and a fixed transom light across the top of the taller windows.
   const glass=new THREE.MeshStandardMaterial({color:0x6f8fa3,transparent:true,opacity:0.5,roughness:0.05,metalness:0.5});
@@ -570,7 +597,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   obj('banHoc1','Bàn học + ghế','Phòng ngủ 1',true,()=>desk(5.5,6.5,8.8,1));                 // north-east corner, beside the window
   obj('banHoc2','Bàn học + ghế','Phòng ngủ 2',true,()=>desk(9.72,10.72,8.8,1));               // as PN1: under the AC, back corner by the lavabo / WC wall, beside the window
   obj('banHoc3','Bàn học + ghế','Phòng ngủ 3',true,()=>desk(10.06,11.06,0.2,-1));
-  obj('giuong3','Giường + 2 tab đầu giường','Phòng ngủ 3',true,()=>{bed(11.55,0.2,13.35,2.2,'N');box(11.1,0.2,11.55,0.65,0,0.5,wood);box(13.35,0.2,13.8,0.65,0,0.5,wood);});
+  obj('giuong3','Giường + tab đầu giường','Phòng ngủ 3',true,()=>{bed(12.0,0.2,13.8,2.2,'N');box(11.55,0.2,12.0,0.65,0,0.5,wood);}); // against the west wall, no corner table (owner's choice)
   obj('giuong1','Giường + 2 tab đầu giường','Phòng ngủ 1',true,()=>{bed(2.71,5.05,4.51,7.05,'N');box(4.51,5.05,4.96,5.5,0,0.5,wood);}); // head to the south wall, along the thờ wall
   obj('giuong2','Giường + 2 tab đầu giường','Phòng ngủ 2',true,()=>{bed(6.66,5.05,8.46,7.05,'N');box(8.46,5.05,8.91,5.5,0,0.5,wood);}); // as PN1: head to the middle wall, along the PN1 wall
   // Án gian thờ (client's photo): 1.97 long × 0.97 deep × 1.27 high to the top of the scrolled ends, back to the PN1
@@ -944,7 +971,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     sf(RT.X0+TI,RT.Z0+TI,mx(THO_X),RT.Z1-TI,E2);sf(mx(THO_X),RT.Z0+TI,RF.X0+TI,mz(4.95),E2); // its south overhang above the lower porch roof
     fb(RP.X0+TI,RP.Z0+TI,RP.X0+TI+0.06,RP.Z1-TI,E3);fb(RP.X0+TI,RP.Z0+TI,wx,RP.Z0+TI+0.06,E3);if(RT.X0>RP.X0)fb(RP.X0+TI,RP.Z1-TI-0.06,RT.X0,RP.Z1-TI,E3);fb(wx-0.06,RP.Z0+TI,wx,hz0,E3);
     sf(RP.X0+TI,RP.Z0+TI,wx,Math.min(RP.Z1-TI,hz9),E3);noMap=false;}
-  const porchLamp=new THREE.MeshBasicMaterial({color:0xfff3c4}); // the big porch ceiling light (kept as it was)
+  const porchLamp=new THREE.MeshBasicMaterial({color:0xd8d4c8});porchLamp.userData.off=0xd8d4c8; // the big porch ceiling light, its own switch (OUT_PORCH)
   box(-0.15-PO/2,2.2,0.25-PO/2,2.75,E3-0.15,E3-0.14,porchLamp,false,null,roofG);
   const finMat=capMat;
   function finial(x:number,y:number,z:number,h:number){const s=new THREE.Mesh(new THREE.SphereGeometry(0.14,16,12),finMat);s.position.set(x-7,y+0.17,z-4.5);roofG.add(s);
@@ -963,18 +990,21 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const washTex=tex(g=>{g.translate(64,128);g.scale(0.38,1);const r=g.createRadialGradient(0,0,6,0,0,128);r.addColorStop(0,'rgba(255,226,170,1)');r.addColorStop(0.4,'rgba(255,210,150,.5)');r.addColorStop(1,'rgba(255,200,140,0)');g.fillStyle=r;g.fillRect(-180,-128,360,256);});
     const glowMat=(map:THREE.Texture,o:number)=>new THREE.MeshBasicMaterial({map,transparent:true,opacity:o,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,toneMapped:false,fog:false});
     const cone=glowMat(coneTex,0.85),wash=glowMat(washTex,0.95);
-    const bulb=new THREE.MeshBasicMaterial({color:0x9a9a9a});lights.bulbs.push(bulb,porchLamp);
+    // three outdoor groups, each on its own switch by the main door (owner's choice): porch ceiling light, wall washers, eave downlights
+    const grp=(k:string,bm:THREE.MeshBasicMaterial)=>{bm.userData.off=bm.userData.off??0x9a9a9a;const R={points:[],glows:[],bulb:bm} as HouseLights['rooms'][string];lights.rooms[k]=R;return R;};
+    const eaveR=grp(OUT_EAVE,new THREE.MeshBasicMaterial({color:0x9a9a9a})),washR=grp(OUT_WASH,new THREE.MeshBasicMaterial({color:0x9a9a9a})),porchR=grp(OUT_PORCH,porchLamp);
+    const bulb=eaveR.bulb;
     const discGeo=new THREE.CylinderGeometry(0.045,0.045,0.012,16);
     /** Glow plane on a wall face: n = outward normal ('+x' etc.), centred at (x, y, z) world. */
-    const glowOn=(mat:THREE.Material,w:number,h:number,x:number,y:number,z:number,n:Dir)=>{
+    const glowOn=(mat:THREE.Material,w:number,h:number,x:number,y:number,z:number,n:Dir,R=eaveR)=>{
       const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat);m.position.set(x,y,z);m.rotation.y={'+z':0,'-z':Math.PI,'+x':Math.PI/2,'-x':-Math.PI/2}[n];
-      m.renderOrder=5;m.visible=false;scene.add(m);lights.glows.push(m);};
+      m.renderOrder=5;m.visible=false;scene.add(m);R.glows.push(m);};
     /** Downlights spread evenly along [a0, a1] (edited plan coords) at `at` across; wall: face to wash and its range. */
     // E: that roof's eave (the three roofs step down), so each row sits in its own soffit
     const row=(axis:'x'|'z',a0:number,a1:number,at:number,wall?:{face:number;n:Dir;from:number;to:number},E=E1)=>{const SOF=E-0.15;
       if(a1-a0<0.3)return;const n=Math.max(1,Math.round((a1-a0)/spacing));
       for(let i=0;i<n;i++){const a=a0+(i+0.5)*(a1-a0)/n,[x,z]=axis==='x'?[a,at]:[at,a];
-        const d=new THREE.Mesh(discGeo,bulb);d.position.set(x-7,SOF-0.006,z-4.5);scene.add(d);lights.downlights++;
+        const d=new THREE.Mesh(discGeo,bulb);d.position.set(x-7,SOF-0.006,z-4.5);scene.add(d);lights.downlights++;lights.fixtures.push({x,z,kind:'eave',room:OUT_EAVE});
         if(wall&&a>=wall.from&&a<=wall.to){const off={'+z':0.06,'-z':-0.06,'+x':0.06,'-x':-0.06}[wall.n];
           if(axis==='x')glowOn(cone,1.0,1.9,x-7,SOF-0.95,wall.face+off-4.5,wall.n);else glowOn(cone,1.0,1.9,wall.face+off-7,SOF-0.95,z-4.5,wall.n);}}};
     const hx0=mx(1.0),hx14=mx(14),hz9=mz(9);
@@ -990,13 +1020,15 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const sconce=(x:number,y:number,z:number,n:Dir)=>{
       const o={'+z':[0,0.05],'-z':[0,-0.05],'+x':[0.05,0],'-x':[-0.05,0]}[n],along=n[1]==='x';
       const b=new THREE.Mesh(new THREE.BoxGeometry(along?0.09:0.12,0.22,along?0.12:0.09),boxMat);b.position.set(x+o[0],y,z+o[1]);scene.add(b);
-      for(const dy of [0.112,-0.112]){const f=new THREE.Mesh(new THREE.BoxGeometry(along?0.07:0.1,0.006,along?0.1:0.07),bulb);f.position.set(x+o[0],y+dy,z+o[1]);scene.add(f);}
-      glowOn(wash,0.75,2.1,x+o[0]*0.4,y,z+o[1]*0.4,n);
-      const l=new THREE.PointLight(0xffd59a,0,3.2,1.6);l.position.set(x+o[0]*3,y,z+o[1]*3);scene.add(l);lights.points.push({light:l,on:1.1*Math.PI});lights.sconces++;};
-    sconce(mx(-0.625-PO-0.24)-7,1.75,mz(0.11)-4.5,'-x');sconce(mx(-0.625-PO-0.24)-7,1.75,mz(4.84)-4.5,'-x');   // porch columns, facing the yard
+      for(const dy of [0.112,-0.112]){const f=new THREE.Mesh(new THREE.BoxGeometry(along?0.07:0.1,0.006,along?0.1:0.07),washR.bulb);f.position.set(x+o[0],y+dy,z+o[1]);scene.add(f);}
+      glowOn(wash,0.75,2.1,x+o[0]*0.4,y,z+o[1]*0.4,n,washR);
+      const l=new THREE.PointLight(0xffd59a,0,3.2,1.6);l.position.set(x+o[0]*3,y,z+o[1]*3);scene.add(l);washR.points.push({light:l,on:1.1*Math.PI});lights.sconces++;
+      lights.fixtures.push({x:x+7+o[0],z:z+4.5+o[1],kind:'sconce',room:OUT_WASH});};
+    sconce(mx(PORCH_COL-0.24)-7,1.75,mz(0.11)-4.5,'-x');sconce(mx(PORCH_COL-0.24)-7,1.75,mz(PORCH_NZ)-4.5,'-x');   // porch columns, facing the yard
     const tw=map.windows.find(w=>w.spec.id==='w-tho')!.rect;                          // both sides of the ancestor-room window
     sconce(mx(THO_X)-7,1.75,mz(tw[1])-0.4-4.5,'-x');sconce(mx(THO_X)-7,1.75,mz(tw[3])+0.4-4.5,'-x');
-    const pl=new THREE.PointLight(0xfff0d0,0,6,1.4);pl.position.set(mx(0.05-PO/2)-7,E3-0.6,mz(2.475)-4.5);scene.add(pl);lights.points.push({light:pl,on:2.2*Math.PI});
+    const pl=new THREE.PointLight(0xfff0d0,0,6,1.4);pl.position.set(mx(0.05-PO/2)-7,E3-0.6,mz(2.475)-4.5);scene.add(pl);porchR.points.push({light:pl,on:2.2*Math.PI});
+    lights.fixtures.push({x:mx(0.05-PO/2),z:mz(2.475),kind:'porch',room:OUT_PORCH});
     // ---- gypsum ceilings (trần thạch cao) at +3.2 in every room but the porch, and the indoor lights ----
     // The ceilings are downward-facing planes: seen from inside the rooms, invisible from above (overview with the
     // roof off still looks in). Living room and bedrooms have a dropped border band (giật cấp) with a hidden LED
@@ -1026,7 +1058,10 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const indoorBulb=new THREE.MeshBasicMaterial({color:0xf2f2f2});indoorBulb.userData={off:0xf2f2f2,oneSided:true};
     const ringMat=new THREE.MeshStandardMaterial({color:0xd9d9d9,roughness:0.4,metalness:0.4});ringMat.userData.oneSided=true;
     const disc=(r:number,mat:THREE.Material,x:number,y:number,z:number)=>{const m=new THREE.Mesh(new THREE.CircleGeometry(r,24),mat);m.rotation.x=Math.PI/2;m.position.set(x-7,y,z-4.5);scene.add(m);};
-    const down=(x:number,z:number,y:number,bm:THREE.Material,room:string)=>{disc(0.075,ringMat,x,y-0.003,z);disc(0.058,bm,x,y-0.006,z);lights.indoor++;lights.fixtures.push({x,z,kind:'down',room});};
+    // downlight Φ75 (a plain disc), spotlight Φ90 (a ring with a recessed lens), owner's sizes
+    const down=(x:number,z:number,y:number,bm:THREE.Material,room:string)=>{disc(0.055,ringMat,x,y-0.003,z);disc(0.0375,bm,x,y-0.006,z);lights.indoor++;lights.fixtures.push({x,z,kind:'down',room});};
+    const spotMat=M(0x2b2d30);spotMat.userData.oneSided=true;
+    const spot=(x:number,z:number,y:number,bm:THREE.Material,room:string)=>{disc(0.065,ringMat,x,y-0.003,z);disc(0.045,spotMat,x,y-0.005,z);disc(0.028,bm,x,y-0.007,z);lights.indoor++;lights.fixtures.push({x,z,kind:'spot',room});};
     const DIRV:Record<Dir,[number,number]>={'+x':[1,0],'-x':[-1,0],'+z':[0,1],'-z':[0,-1]};
     const TRAYS=new Set(['Phòng khách']);
     // bedrooms: flat ceiling, no light over the bed head (default plan coords of the zone at each bed's head)
@@ -1067,11 +1102,10 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
         [[0.25,0.45,0.42,0.32],[0.75,0.3,0.4,0.3],[0.3,1.2,0.5,0.35],[0.7,1.75,0.38,0.28]].forEach(([u,v,s2,h2])=>{if(u+s2/2>w-0.05)return;
           const bx=new THREE.Mesh(new THREE.BoxGeometry(s2,h2,s2*0.8),loftBox);bx.position.set(a0+u-7,WC_CEIL+0.1+h2/2,b0+v+0.3-4.5);loftG.add(bx);});
       }else if(BED_LIGHTS[r.room]){
-        // PN1 / PN2 / PN3: flat ceiling, 4 corner downlights 0.6 m from both walls and one over the middle of the bed
-        // foot (PN1 / PN2: its own group on the bedside 1-way switch; PN3: with the corners on the 2-way pair)
+        // PN1 / PN2 / PN3: flat ceiling, 4 corner spotlights 0.6 m from both walls and one downlight on its own group
         ceil(x0,z0,x1,z1,CEIL);
-        // + one midway between the two corner lights on the +z side (owner's marks: PN1 / PN2 under the window, PN3 by the corridor wall)
-        for(const [x,z] of [[a0+0.6,b0+0.6],[a1-0.6,b0+0.6],[a1-0.6,b1-0.6],[cx,b1-0.6],[a0+0.6,b1-0.6]])down(x,z,CEIL,R.bulb,r.room);
+        // 4 corner spotlights Φ90 (the room group) + the room's downlight Φ75 (own group, BED_LIGHTS)
+        for(const [x,z] of [[a0+0.6,b0+0.6],[a1-0.6,b0+0.6],[a1-0.6,b1-0.6],[a0+0.6,b1-0.6]])spot(x,z,CEIL,R.bulb,r.room);
         const BL=BED_LIGHTS[r.room],bx=mx(BL.x),bz=mz(BL.z);
         if(BL.own){const key=bedLamp(r.room),RB:HouseLights['rooms'][string]={points:[],glows:[],bulb:indoorBulb.clone()};lights.rooms[key]=RB;
           down(bx,bz,CEIL,RB.bulb,key);
@@ -1090,7 +1124,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
           if(inHead(r.room,x,z)||Math.hypot(x-lx,z-lz)<0.7)continue;down(x,z,CEIL,R.bulb,r.room);}
       }else{
         ceil(x0,z0,x1,z1,CEIL);
-        const nx=Math.max(1,Math.round((w-0.4)/1.6)),nz=Math.max(1,Math.round((d-0.4)/1.6));
+        const one=r.room==='Lavabo',nx=one?1:Math.max(1,Math.round((w-0.4)/1.6)),nz=one?1:Math.max(1,Math.round((d-0.4)/1.6)); // the washing zone: 1 light (owner's choice)
         for(let i=0;i<nx;i++)for(let k=0;k<nz;k++){const x=a0+w*(i+0.5)/nx,z=b0+d*(k+0.5)/nz;
           if(r.room==='Bếp + ăn'&&Math.hypot(x-mx(KFAN[0]),z-mz(KFAN[1]))<0.75)continue; // under the dining fan
           down(x,z,CEIL,R.bulb,r.room);}
@@ -1107,7 +1141,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
   // ground beams (dầm móng) under every wall and a tie beam (dầm giằng) at the eaves. Hidden unless switched on.
   // Built in EDITED coords so it follows room stretches; not part of collisions or clicks.
   const structG=new THREE.Group();structG.visible=false;scene.add(structG);
-  const SM={foot:M(0x8f8b84),gb:M(0xb86a2c),col:M(0xc23b2e),tie:M(0xd99a1e)};
+  const SM={foot:M(0x8f8b84),lean:M(0xc9c4b8),gb:M(0xb86a2c),col:M(0xc23b2e),tie:M(0xd99a1e)};
   const sEdge=new THREE.LineBasicMaterial({color:0x2a2a2a,transparent:true,opacity:0.6});
   const sbox=(x0:number,z0:number,x1:number,z1:number,y0:number,y1:number,mat:THREE.Material)=>{
     const g=new THREE.BoxGeometry(Math.abs(x1-x0),y1-y0,Math.abs(z1-z0)),m=new THREE.Mesh(g,mat);
@@ -1115,12 +1149,13 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const e=new THREE.LineSegments(new THREE.EdgesGeometry(g),sEdge);e.position.copy(m.position);structG.add(e);};
   const structure:House['structure']={group:structG,columns:0,footings:0,groundBeam:0,tieBeam:0,cols:[],beams:[]};
   {
-    const C=0.22,MAXSPAN=5.0,FOOT=1.0;
-    const Y={foot0:GROUND-1.15,foot1:GROUND-0.85,gb0:-0.7,gb1:-0.3,tie0:E1-0.3,tie1:E1};
+    const C=0.22,MAXSPAN=5.0;
+    // footing levels after the owner's foundation detail (anh-ket-cau MĐ-1): pad underside −2.000 on 100 lean concrete,
+    // pad 300 + sloped top 200 (to −1.500), the neck column up to the ground beam
+    const Y={foot0:-2.0,foot1:-1.7,foot2:-1.5,gb0:-0.7,gb1:-0.3,tie0:E1-0.3,tie1:E1};
     // wall centre lines in default plan coords: axis 'x' = runs along x at z = at
     type Line={axis:'x'|'z';at:number;a0:number;a1:number;/** ground beam only, no tie beam on top */noTie?:boolean};
-    // the 200 brick fill hiding the (6.0, 5) column is not on the frame
-    const lines:Line[]=WALLS.filter(w=>!(w[0]===5.9&&w[1]===5.05&&w[2]===6.5)).map(w=>(w[2]-w[0])>=(w[3]-w[1])?{axis:'x',at:(w[1]+w[3])/2,a0:w[0],a1:w[2]}:{axis:'z',at:(w[0]+w[2])/2,a0:w[1],a1:w[3]});
+    const lines:Line[]=WALLS.map(w=>(w[2]-w[0])>=(w[3]-w[1])?{axis:'x',at:(w[1]+w[3])/2,a0:w[0],a1:w[2]}:{axis:'z',at:(w[0]+w[2])/2,a0:w[1],a1:w[3]});
     // The middle-wall beam runs on unbroken over the corridor → lavabo opening (x 11.45–13.2), and the WC1 / WC2
     // partition beam (x = 12.51) is carried on through the lavabo to land on it, so no beam end is left open there.
     {const sp=lines.filter(l=>l.axis==='x'&&Math.abs(l.at-5)<0.01);
@@ -1134,8 +1169,7 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
       // beams stay on the column lines
       // the PN2 / lavabo-WC wall keeps 100 mm; its columns move to x = 10.83 instead (owner's choice), flush with the PN2
       // face (10.72) and standing out on the lavabo / WC side, so nothing shows in PN2 and WC1 stays 1.6 m
-      // the PN1 / PN2 wall's beams run on the living room's frame line x 6.0 (owner's choice), not under the wall (6.58)
-      for(const [wc,cl] of [[2.63,2.6],[10.77,10.83],[6.58,6.0]]){const l=lines.find(l=>l.axis==='z'&&Math.abs(l.at-wc)<0.01);if(l)l.at=cl;}}
+      for(const [wc,cl] of [[2.63,2.6],[10.77,10.83]]){const l=lines.find(l=>l.axis==='z'&&Math.abs(l.at-wc)<0.01);if(l)l.at=cl;}}
     const pts:[number,number][]=[];
     const addPt=(x:number,z:number)=>{if(!pts.some(p=>Math.abs(p[0]-x)<0.3&&Math.abs(p[1]-z)<0.3))pts.push([x,z]);};
     // openings on a line (default coords, along the line), to keep columns out of them
@@ -1162,7 +1196,9 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     // west gable (owner's choice): one column at the middle-wall junction (13.9, 5) instead of (13.9, 4) and (13.9, 6.1)
     // the PN1 corner column moved from (2.6, 5) to the main-door wall corner (1.1, 5), and the PN1 / PN2 one on the
     // middle wall from (6.45, 5) to (6.0, 5), in line with the living room's TV wall (owner's choices; walls unchanged)
-    for(const p of [[1.1,0.1],[13.9,0.1],[13.9,5],[THO_X+0.1,5],[1.1,5],[6.0,5],[10.83,5],[THO_X+0.1,8.9],[2.6,8.9],[6.0,8.9],[10.83,8.9],[13.9,8.9]])addPt(p[0],p[1]);
+    // no column at the ancestor room's porch corner (THO_X, 5) (owner's choice): the porch's north beam runs on the
+    // middle-wall line into the living-room column (1.1, 5), and the thờ front wall's beam lands on it
+    for(const p of [[1.1,0.1],[13.9,0.1],[13.9,5],[1.1,5],[6.0,5],[10.83,5],[THO_X+0.1,8.9],[2.6,8.9],[6.58,8.9],[10.83,8.9],[13.9,8.9]])addPt(p[0],p[1]);
     const cross:Line[]=[];
     const MID=6.0;addPt(MID,0.1);cross.push({axis:'z',at:MID,a0:0.1,a1:5.0});
     addPt(10,0.1);
@@ -1181,23 +1217,33 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     lines.push(...cross);
     // Porch (1.8 m deep, only the small porch roof on it): no footings of its own. Its two columns stand on ground
     // beams cantilevered out from the house: the facade beam line (z = 0.1) carried on, and one hard against the
-    // middle-wall corner (core at z = 4.84, inside the 350 cladding), plus a front ground beam linking the two.
-    const porch:[number,number][]=[[-0.625-PORCH_OUT,0.11],[-0.625-PORCH_OUT,4.84]];
+    // middle-wall line (z = PORCH_NZ, straight on into the living-room column), plus a front ground beam linking the two.
+    const porch:[number,number][]=[[PORCH_COL,0.11],[PORCH_COL,PORCH_NZ]];
     // footings + columns (mapped centres; sizes stay real)
     // The middle wall (and any 110 wall running along x) is built flush with the FRONT face of its columns, so the
     // living room / kitchen / corridor side is flat: the column (and the beams on that line) shift towards the
     // bedrooms and stick out ~110 mm there only, shown as a pilaster (trụ áp tường) in the wall colour.
     const thinX=(x:number,z:number)=>WALLS.find(w=>(w[3]-w[1])<0.15&&(w[2]-w[0])>(w[3]-w[1])&&Math.abs((w[1]+w[3])/2-z)<0.02&&x>=w[0]-0.01&&x<=w[2]+0.01);
     const colZ=(x:number,z:number)=>{const w=thinX(x,z);return w?mz(w[1])+C/2:mz(z);};
-    for(const [x,z] of pts){const X=mx(x),Z=colZ(x,z);structure.cols.push({x:X,z:Z,porch:false});
+    // footing type by the column's tributary roof / floor area (half the spans to the next column on its row and on
+    // its line, 0.6 m past an outside wall): MĐ1 1500, MĐ2 1300, MĐ3 1200, MĐ4 1000 (owner's reference set);
+    // C2 (4Ø18) on MĐ1 / MĐ2, C1 (4Ø16) elsewhere, C3 the porch columns
+    const half=(arr:number[],v:number)=>{const lo=arr.filter(a=>a<v-0.3),hi=arr.filter(a=>a>v+0.3);
+      return ((lo.length?v-Math.max(...lo):1.2)+(hi.length?Math.min(...hi)-v:1.2))/2;};
+    const footOf=(x:number,z:number)=>{const ax=half(pts.filter(p=>Math.abs(p[1]-z)<0.3).map(p=>p[0]),x),az=half(pts.filter(p=>Math.abs(p[0]-x)<0.3).map(p=>p[1]),z),A=ax*az;
+      const [t,B]=A>=18?['MĐ1',1.5]:A>=11?['MĐ2',1.3]:A>=6.5?['MĐ3',1.2]:['MĐ4',1.0];return {foot:t as string,B:B as number,ct:B>=1.3?'C2':'C1',trib:A};};
+    for(const [x,z] of pts){const X=mx(x),Z=colZ(x,z),ft=footOf(x,z),FOOT=ft.B;structure.cols.push({x:X,z:Z,porch:false,...ft});
+      sbox(X-FOOT/2-0.1,Z-FOOT/2-0.1,X+FOOT/2+0.1,Z+FOOT/2+0.1,Y.foot0-0.1,Y.foot0,SM.lean);
       sbox(X-FOOT/2,Z-FOOT/2,X+FOOT/2,Z+FOOT/2,Y.foot0,Y.foot1,SM.foot);
+      {const r0=FOOT/2*Math.SQRT2,r1=(C/2+0.05)*Math.SQRT2,g=new THREE.CylinderGeometry(r1,r0,Y.foot2-Y.foot1,4,1),m=new THREE.Mesh(g,SM.foot);
+        m.rotation.y=Math.PI/4;m.position.set(X-7,(Y.foot1+Y.foot2)/2,Z-4.5);structG.add(m);const e=new THREE.LineSegments(new THREE.EdgesGeometry(g),sEdge);e.rotation.copy(m.rotation);e.position.copy(m.position);structG.add(e);}
       sbox(X-C/2,Z-C/2,X+C/2,Z+C/2,Y.foot1,Y.tie1,SM.col);structure.columns++;structure.footings++;}
     noMap=true;
     for(const [x,z] of pts){
       if(!WALLS.some(w=>Math.min(w[2]-w[0],w[3]-w[1])<0.15&&x>=w[0]-0.01&&x<=w[2]+0.01&&z>=w[1]-0.01&&z<=w[3]+0.01))continue;
       const X=mx(x),Z=colZ(x,z),f=thinX(x,z)?0.003:0;box(X-C/2,Z-C/2+f,X+C/2,Z+C/2,0,Y.tie1,wallMat,true);} // flush face: 3 mm behind, no z-fight
     noMap=false;
-    for(const [x,z] of porch){const X=mx(x),Z=mz(z);structure.cols.push({x:X,z:Z,porch:true});
+    for(const [x,z] of porch){const X=mx(x),Z=mz(z);structure.cols.push({x:X,z:Z,porch:true,foot:'',B:0,ct:'C3',trib:0});
       sbox(X-C/2,Z-C/2,X+C/2,Z+C/2,Y.gb0,PC,SM.col);structure.columns++;}
     // beams along every wall line; the eave tie beam on every wall
     const beam=(l:Line,y0:number,y1:number,mat:THREE.Material)=>{
@@ -1206,23 +1252,27 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
     const rec=(l:Line,porch:boolean)=>{const p=l.axis==='x'?mx(l.a0):mz(l.a0),q=l.axis==='x'?mx(l.a1):mz(l.a1),c=l.axis==='x'?colZ((l.a0+l.a1)/2,l.at):mx(l.at);
       structure.beams.push(l.axis==='x'?{x0:p,z0:c,x1:q,z1:c,porch}:{x0:c,z0:p,x1:c,z1:q,porch});};
     for(const l of lines){structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);if(!l.noTie)structure.tieBeam+=beam(l,Y.tie0,Y.tie1,SM.tie);rec(l,false);}
-    for(const l of [{axis:'z',at:-0.625-PORCH_OUT,a0:0.11,a1:4.84},{axis:'x',at:0.11,a0:-0.625-PORCH_OUT,a1:1.1},{axis:'x',at:4.84,a0:-0.625-PORCH_OUT,a1:1.1}] as Line[])
-      {structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);structure.tieBeam+=beam(l,PC,PC+0.3,SM.tie);rec(l,true);}
+    for(const l of [{axis:'z',at:PORCH_COL,a0:0.11,a1:PORCH_NZ},{axis:'x',at:0.11,a0:PORCH_COL,a1:1.1},{axis:'x',at:PORCH_NZ,a0:PORCH_COL,a1:THO_X}] as Line[]){
+      // the north porch tie beam (at the porch beam level) runs on inside the thờ wall to the main-door wall column (1.1, 5), not ending in the air at THO_X
+      const t=l.axis==='x'&&l.at===PORCH_NZ?{...l,a1:1.1}:l;
+      structure.groundBeam+=beam(l,Y.gb0,Y.gb1,SM.gb);structure.tieBeam+=beam(t,PC,PC+0.3,SM.tie);rec(t,true);}
   }
   // ---- roof slab (sàn mái BTCT 100) and steel roof frame (khung thép mái ngói), after the owner's reference set:
   // cây chống / cầu phong 40x80x1.8 (rafters ~1.2 m apart), li tô 30x30x1.4 at 200 from the eave then every 330, a ring
   // of props + purlin 2.4 m in from the ridge. The slab is drawn with the roof (hidden with it) and ghosted in the
   // structure view, where the frame shows. Built from the three roofs as rendered (the top surface wins).
+  /** valley gutter outlets [x, y, z] (mapped plan coords), piped down inside the nearest column */
+  const rainOut:[number,number,number][]=[];
   const roofFrame:RoofFrame={members:[],props:[],slabs:[],area:{main:0,tho:0,sanh:0},ridge:0,hips:0,valley:0,ridgeEnds:0,hipFeet:0,valleyPts:[],downpipes:[],roofs:[],edgePts:[],t:RF.t};
   {
     const SLAB=0.1,THO_TOP=E2;
     const slabMat=M(0xb9b6ae),slabGhost=new THREE.MeshStandardMaterial({color:0x9fa4aa,transparent:true,opacity:0.3,depthWrite:false});
-    const PCX=-0.625-PORCH_OUT; // porch column centre line
+    const PCX=-0.625-PORCH_OUT; // the porch roof / slab reference line (the columns now stand further out, PORCH_COL)
     for(const [x0,z0,x1,z1,y] of [[1.0,0.2,10.72,9.0,E1],[10.72,0.2,14.0,6.05,E1],[4.0,0,14.0,0.2,E1],[THO_X,5.05,1.0,9.0,THO_TOP],
       // eave slab (mái đua BTCT) 600 out from the outer wall faces (the WC corner has the flat roof slab)
       [0.4,-0.6,14.6,0,E1],[14,0,14.6,6.05,E1],[THO_X-0.6,9.0,10.72,9.6,E1],[THO_X-0.6,4.35,THO_X,9.0,E1],[THO_X,4.35,0.4,4.95,E1],
-      // porch slab under its roof, 880 out from the column centres
-      [PCX-0.88,0.11-0.88,1.0,4.95,E3],[PCX-0.88,4.95,THO_X,4.84+0.88,E3]] as [number,number,number,number,number][]){
+      // porch slab under its roof, 600 out from the porch beam faces (PORCH_EAVE from the column centres)
+      [PCX-PORCH_EAVE,0.11-PORCH_EAVE,1.0,4.95,E3],[PCX-PORCH_EAVE,4.95,THO_X,PORCH_NZ+PORCH_EAVE,E3]] as [number,number,number,number,number][]){
       box(x0,z0,x1,z1,y-SLAB,y,slabMat,false,null,roofG);
       const X0=mx(x0),Z0=mz(z0),X1=mx(x1),Z1=mz(z1);sbox(X0,Z0,X1,Z1,y-SLAB,y,slabGhost);roofFrame.slabs.push({x0:X0,z0:Z0,x1:X1,z1:Z1,y});}
     const RDEF:{k:RoofKey;r:typeof RF;E:number;hl:boolean;hr:boolean;ex:(x:number,z:number)=>boolean}[]=[
@@ -1282,14 +1332,33 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
       RDEF.forEach((d,k)=>{const h=hOf(d,x,z);if(h>bh){bh=h;b=k;}});if(b>=0){own[i*nz+j]=b;roofFrame.area[RDEF[b].k]+=C*C;}}
     const O=(i:number,j:number)=>i<0||j<0||i>=nx||j>=nz?-1:own[i*nz+j];
     const flat=(x:number,z:number)=>x>FX&&z>FZ&&x<RF.X1&&z<RF.Z1;
-    let vEdges=0;const ends:[number,number][]=[];
+    let vEdges=0;const ends:[number,number][]=[];const gutter:[number,number,number][]=[];rainOut.length=0;
     for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){const a=O(i,j);
       for(const [di,dj] of [[1,0],[0,1]]){const b=O(i+di,j+dj);const x=gx0+(i+0.5+di/2)*C,z=gz0+(j+0.5+dj/2)*C;
-        if(a>=0&&b>=0&&a!==b){vEdges++;roofFrame.valleyPts.push([x,z]);
+        // a real valley only where the two roof faces meet at the same height (not where the main eave just overhangs
+        // the lower porch roof: the water drips off there)
+        const ha=a>=0?hOf(RDEF[a],x,z):-Infinity,hb=b>=0?hOf(RDEF[b],x,z):-Infinity;
+        // ...and not where two faces are one plane (the thờ wing's north face runs on as the main roof's: mái liền)
+        // (the top surface creases into a V there: the mid point sits below the average of the two sides)
+        const T=(u:number,v:number)=>Math.max(...RDEF.map(d=>hOf(d,u,v)));
+        const cop=!(T(x+0.2,z)+T(x-0.2,z)-2*T(x,z)>0.04||T(x,z+0.2)+T(x,z-0.2)-2*T(x,z)>0.04);
+        if(a>=0&&b>=0&&a!==b&&Math.abs(ha-hb)<0.03&&!cop){vEdges++;roofFrame.valleyPts.push([x,z]);gutter.push([x,Math.max(ha,hb),z]);
           let out=false;for(let p=-3;p<=3&&!out;p++)for(let q=-3;q<=3&&!out;q++)if(O(i+p,j+q)<0&&!flat(gx0+(i+p+0.5)*C,gz0+(j+q+0.5)*C))out=true;if(out)ends.push([x,z]);}
         else if((a>=0)!==(b>=0)&&!flat(x,z))roofFrame.edgePts.push([x,z]);}}
     roofFrame.valley=vEdges*C/Math.SQRT2*Math.sqrt(1+RF.t*RF.t/2);
-    for(const p of ends){const c=roofFrame.downpipes.find(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<0.6);if(!c)roofFrame.downpipes.push([p[0],p[1]]);}
+    // outlets (phễu thu) at the low ends of the valley gutters: a gutter point with no lower neighbour; merged within 0.6
+    void ends;
+    // only at the END of a gutter run (its neighbours all on one side), so not along the level porch / thờ stretch
+    const isEnd=(g:[number,number,number])=>{const nb=gutter.filter(q=>q!==g&&Math.hypot(q[0]-g[0],q[2]-g[2])<0.09);
+      return nb.length>0&&nb.every(a=>nb.every(b=>Math.hypot(a[0]-b[0],a[2]-b[2])<0.09));};
+    for(const g of gutter){const low=!gutter.some(q=>q!==g&&Math.hypot(q[0]-g[0],q[2]-g[2])<0.09&&q[1]<g[1]-1e-4);if(!low||!isEnd(g))continue;
+      if(!roofFrame.downpipes.some(q=>Math.hypot(q[0]-g[0],q[1]-g[2])<0.6)){roofFrame.downpipes.push([g[0],g[2]]);rainOut.push(g);}}
+    // máng xối (owner's reference roof plan): a 400 galvanised / stainless valley gutter, shown as the strip left
+    // visible between the tiles along each valley (one instanced mesh, with the roof)
+    {const gm=new THREE.MeshStandardMaterial({color:0xa9b1b8,metalness:0.6,roughness:0.35}),geo=new THREE.BoxGeometry(0.11,0.02,0.11);
+      const im=new THREE.InstancedMesh(geo,gm,Math.max(1,gutter.length)),o=new THREE.Object3D();
+      gutter.forEach(([x,y,z],i)=>{o.position.set(x-7,y+0.035,z-4.5);o.rotation.set(0,Math.PI/4,0);o.updateMatrix();im.setMatrixAt(i,o.matrix);});
+      im.count=gutter.length;roofG.add(im);}
   }
   // ---- water supply / drainage (plumbing.ts): pipes in a hidden group shown by the "Ống nước" button (house
   // ghosted); the technical shaft box and the floor drains are real fittings, always shown.
@@ -1303,6 +1372,31 @@ export function buildHouse(world: THREE.Scene, map: PlanMap = new PlanMap(), lay
         const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,L,10),mat);m.position.copy(a).add(b).multiplyScalar(0.5);
         m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());pipeG.add(m);
         const j=new THREE.Mesh(new THREE.SphereGeometry(r*1.25,10,8),mat);j.position.copy(b);pipeG.add(j);}}
+    // rainwater (owner's reference roof plan: "ống thoát nước trong cột"): from each valley gutter outlet a funnel
+    // (phễu thu) and a Ø90 uPVC pipe running under the tiles to the nearest column, down inside it below the ground
+    // and out to a rainwater pit (hố ga) with a grate beside the house
+    {const rm=mats.rain,R=0.045;
+      const steel=new THREE.MeshStandardMaterial({color:0xa9b1b8,metalness:0.6,roughness:0.35});
+      const seg=(a:THREE.Vector3,b:THREE.Vector3)=>{const L=a.distanceTo(b);if(L<0.005)return;const m=new THREE.Mesh(new THREE.CylinderGeometry(R,R,L,12),rm);
+        m.position.copy(a).add(b).multiplyScalar(0.5);m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());pipeG.add(m);
+        const j=new THREE.Mesh(new THREE.SphereGeometry(R*1.2,10,8),rm);j.position.copy(b);pipeG.add(j);};
+      // keep the pits off the house, the porch floor and the steps (default plan coords)
+      const blocked=(x:number,z:number)=>[[1.0,0,14,9],[THO_X,5,1.0,9],[0,0,1.0,4.95],[-2.5,-0.35,0,5.5]].some(r=>x>r[0]-0.25&&x<r[2]+0.25&&z>r[1]-0.25&&z<r[3]+0.25);
+      for(const [ox,oy,oz] of rainOut){
+        const c=structure.cols.reduce((b,q)=>Math.hypot(q.x-ox,q.z-oz)<Math.hypot(b.x-ox,b.z-oz)?q:b,structure.cols[0]);
+        const V=(x:number,y:number,z:number)=>new THREE.Vector3(x-7,y,z-4.5);
+        const f=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.05,0.12,16,1,true),steel);f.position.copy(V(ox,oy-0.02,oz));roofG.add(f);
+        const yTop=oy-0.1,yRun=Math.min(yTop,E3)-0.05,yLow=GROUND-0.45;
+        const pit=[[0,0.65],[0,-0.65],[-0.65,0],[0.65,0]].map(([dx,dz])=>[c.x+dx,c.z+dz]).find(([x,z])=>!blocked(x,z))??[c.x,c.z+0.65];
+        const pts=[V(ox,yTop,oz),V(c.x,yRun,c.z),V(c.x,yLow,c.z),V(pit[0],yLow,pit[1])];
+        for(let i=0;i+1<pts.length;i++)seg(pts[i],pts[i+1]);
+        noMap=true;box(pit[0]-0.2,pit[1]-0.2,pit[0]+0.2,pit[1]+0.2,GROUND-0.6,GROUND+0.02,M(0x8d8a84),true);
+        box(pit[0]-0.16,pit[1]-0.16,pit[0]+0.16,pit[1]+0.16,GROUND+0.02,GROUND+0.03,M(0x2b2d30),false);noMap=false;}
+      // the clean-water pits of the AC condensate and the flat roof (plumbing.ts), and the flat roof's drain funnel
+      for(const p of RAIN_PITS){const t=p.top??GROUND;box(p.x-0.2,p.z-0.2,p.x+0.2,p.z+0.2,GROUND-0.6,t+0.012,M(0x8d8a84),true);
+        box(p.x-0.16,p.z-0.16,p.x+0.16,p.z+0.16,t+0.012,t+0.02,M(0x2b2d30),false);}
+      {const f=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,0.03,16),steel);f.position.set(mx(ROOF_DRAIN.x)-7,E1+0.015,mz(ROOF_DRAIN.z)-4.5);roofG.add(f);
+        const gr=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.075,0.035,12),M(0x2b2d30));gr.position.copy(f.position);roofG.add(gr);}}
     // septic tank + manholes (below ground) and the vent cap
     const conc=new THREE.MeshStandardMaterial({color:0x9c9890,roughness:0.9,transparent:true,opacity:0.75});
     const g=new THREE.Mesh(new THREE.BoxGeometry(mx(SEPTIC.x1)-mx(SEPTIC.x0),SEPTIC.depth,Math.abs(mz(SEPTIC.z1)-mz(SEPTIC.z0))),conc);

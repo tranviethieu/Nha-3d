@@ -74,8 +74,22 @@ export const GROUND = -0.76;
 /** Risers from the yard to the floor and their height. */
 export const RISERS = Math.round(-GROUND / 0.15), RISE = -GROUND / RISERS;
 /** The porch was made deeper after the owner's reference house: columns, beams, slab, steps, pedestals and the porch
- *  roof all sit PORCH_OUT further out (column centre 2.28 m from the living-room wall face). */
+ *  roof all sit PORCH_OUT further out (column centre 2.275 m from the living-room wall face, the owner's section 1-1:
+ *  2035 to the column face + 480 column). */
 export const PORCH_OUT = 0.65;
+/** Porch eave slab overhang from the porch column centres, the same on all three sides: the porch tile edge runs flush
+ *  with the main roof's south tile edge (z −0.68 = 0.11 − PORCH_EAVE − 0.08, owner's choice: one straight eave line);
+ *  the tiles go 80 beyond the slab. */
+export const PORCH_EAVE = 0.11 + 0.68 - 0.08;
+/** Porch floor depth from the living-room wall face (x 1.0): 1.0 m (owner's choice); the steps start at its edge and
+ *  the columns stand on the stair cheek walls beyond it. */
+export const PORCH_FLOOR = 1.0;
+/** The porch's north column line (owner's choice): on the ancestor room's middle-wall beam (z 5.06, the 220 column
+ *  flush with the wall's porch face 4.95), so the porch beam runs straight on into the living-room column (1.1, 5). */
+export const PORCH_NZ = 5.06;
+/** Porch column centre line: the two free columns stand on the stair cheek walls (bờ tường bậc tam cấp, top flush
+ *  with the porch floor), beyond the 1.0 m floor's edge, after the owner's section 1-1 (anh-mai 09.50.57). */
+export const PORCH_COL = -0.625 - PORCH_OUT;
 export const THO_SCREEN = { x0: 1.2, x1: 2.55, z0: 4.95, z1: 5.05, top: 3.2, open: [1.42, 2.22] as [number, number], openH: 2.2 };
 export const DOOR_SPECS: DoorSpec[] = [
   { id: 'd-main', label: 'Cửa chính D1 (gỗ óc chó, 3000 × 2900)', room: 'Phòng khách', axis: 'z', at: 1.1, hinge: 2.475, len: 2.1, cd: '+z', od: '-x', kind: 'main', h: 2.4 },
@@ -133,7 +147,7 @@ export interface RoomDim {
 // Figures as printed on the floor plan (14 m x 9 m, facade = z 0). Hành lang has no area on the
 // plan, so it is computed from the model.
 export const ROOM_DIMS: RoomDim[] = [
-  { room: 'Sảnh', title: 'Hiên', rect: [-0.8 - PORCH_OUT, 0, 1.0, 4.95], w: '2.45', d: '4.95', area: '12.13' },
+  { room: 'Sảnh', title: 'Hiên', rect: [1.0 - PORCH_FLOOR, 0, 1.0, 4.95], w: '1.00', d: '4.95', area: '4.95' },
   { room: 'Phòng khách', title: 'Phòng khách', rect: [1.2, 0.2, 5.95, 4.95], w: '4.8', d: '4.75', area: '22.80' },
   { room: 'Bếp + ăn', title: 'Bếp + ăn', rect: [5.95, 0.2, 9.95, 4.95], w: '3.95', d: '4.75', area: '18.76' },
   { room: 'Phòng ngủ 3', title: 'P. ngủ 3', rect: [10.05, 0.2, 13.8, 3.95], w: '3.75', d: '3.75', area: '14.06' },
@@ -214,12 +228,12 @@ export class PlanMap {
     };
     const l = this.layout;
     return {
-      // overhangs as in the reference section 1-1: a BTCT eave slab 600 out from the outer wall faces (880 from the
-      // porch column centres) and the tiles 80 beyond it, so the tile edge is 680 / 960 out
+      // overhangs as in the reference section 1-1: a BTCT eave slab 600 out from the outer wall faces (and 600 from the
+      // porch beam faces, PORCH_EAVE from the column centres) and the tiles 80 beyond it
       main: make(l.roof ?? {}, mx(0.32), mx(14.68), mz(-0.68), mz(9.68), 'x1', 'mid'),
       tho: make(l.subRoofs?.tho ?? {}, mx(THO_X - 0.68), mx(4.0), mz(4.95 - 0.68), mz(9.68), 'x0', 'z1'),
-      // porch: the same overhang beyond both column centres (z 0.11, 4.84) so its two side slopes are equal; its north side tucks under the thờ wing
-      sanh: make(l.subRoofs?.sanh ?? {}, mx(-0.625 - PORCH_OUT - 0.96), mx(4.0), mz(0.11 - 0.96), mz(4.84 + 0.96), 'x0', 'z0'),
+      // porch: the same overhang beyond both column centres (z 0.11, PORCH_NZ) so its two side slopes are equal; its north side tucks under the thờ wing
+      sanh: make(l.subRoofs?.sanh ?? {}, mx(-0.625 - PORCH_OUT - PORCH_EAVE - 0.08), mx(4.0), mz(0.11 - PORCH_EAVE - 0.08), mz(PORCH_NZ + PORCH_EAVE + 0.08), 'x0', 'z0'),
     };
   }
   get roof() { return this.roofs.main; }

@@ -201,7 +201,7 @@ export class Game {
   private pipesOn = false;
   togglePipes = () => {
     this.pipesOn = !this.pipesOn; if (this.pipesOn) this.structOn = false; this.applyStructure();
-    this.onToast(this.pipesOn ? 'Cấp thoát nước: xanh lạnh, đỏ nóng, nâu thoát xí, xám thoát sàn, xanh lá thông hơi' : 'Đã ẩn đường ống');
+    this.onToast(this.pipesOn ? 'Cấp thoát nước: xanh lạnh, đỏ nóng, nâu thoát xí, xám thoát sàn, xanh lá thông hơi, xanh nhạt thoát nước mưa, điều hoà, tràn téc' : 'Đã ẩn đường ống');
   };
   toggleStructure = () => {
     this.structOn = !this.structOn; if (this.structOn) this.pipesOn = false; this.applyStructure();
